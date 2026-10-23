@@ -1,0 +1,186 @@
+{
+  "entities": {
+    "Asset": {
+      "title": "Hardware Asset",
+      "description": "Hardware equipment inventory item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "assetTag": { "type": "string" },
+        "serialNumber": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "brand": { "type": "string" },
+        "model": { "type": "string" },
+        "status": { "type": "string" },
+        "branchId": { "type": "string" }
+      },
+      "required": ["id", "assetTag", "serialNumber", "name", "category", "brand", "model", "status", "branchId"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Staff member eligible for equipment custody",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "employeeNumber": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "department": { "type": "string" },
+        "position": { "type": "string" },
+        "branchId": { "type": "string" }
+      },
+      "required": ["id", "employeeNumber", "fullName", "email", "department", "position", "branchId"]
+    },
+    "Assignment": {
+      "title": "Assignment",
+      "description": "Carta responsiva equipment custody document with digital signatures",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "folioResponsiva": { "type": "string" },
+        "assetId": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "assignedDate": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "folioResponsiva", "assetId", "employeeId", "assignedDate", "status"]
+    },
+    "MaintenanceRecord": {
+      "title": "Maintenance Record",
+      "description": "Preventive or corrective maintenance service record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "assetId": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string" },
+        "date": { "type": "string" },
+        "nextScheduledDate": { "type": "string" }
+      },
+      "required": ["id", "assetId", "type", "status", "date", "nextScheduledDate"]
+    },
+    "Branch": {
+      "title": "Branch",
+      "description": "Physical corporate branch or warehouse location",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" }
+      },
+      "required": ["id", "code", "name", "city", "state"]
+    },
+    "Transfer": {
+      "title": "Transfer",
+      "description": "Hardware transfer between branches",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "folio": { "type": "string" },
+        "assetId": { "type": "string" },
+        "originBranchId": { "type": "string" },
+        "destinationBranchId": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "folio", "assetId", "originBranchId", "destinationBranchId", "status"]
+    },
+    "TimelineEvent": {
+      "title": "Timeline Event",
+      "description": "Audit trail log event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "type", "title", "description", "timestamp"]
+    },
+    "EmailNotification": {
+      "title": "Email Notification",
+      "description": "Record of email sent via system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "toEmail": { "type": "string" },
+        "subject": { "type": "string" },
+        "sentAt": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "toEmail", "subject", "sentAt", "status"]
+    },
+    "EquipmentLoan": {
+      "title": "Equipment Loan",
+      "description": "Temporary equipment loan for trip or commission",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "folio": { "type": "string" },
+        "assetId": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "startDate": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "folio", "assetId", "employeeId", "startDate", "status"]
+    },
+    "SystemUser": {
+      "title": "System User",
+      "description": "Operator account with role-based access",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "email", "name", "role", "status"]
+    }
+  },
+  "firestore": {
+    "/assets/{assetId}": {
+      "schema": "Asset",
+      "description": "Hardware assets catalog"
+    },
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Company personnel directory"
+    },
+    "/assignments/{assignmentId}": {
+      "schema": "Assignment",
+      "description": "Cartas responsivas and equipment custody records"
+    },
+    "/maintenanceRecords/{maintenanceId}": {
+      "schema": "MaintenanceRecord",
+      "description": "Hardware maintenance schedules and diagnostic logs"
+    },
+    "/branches/{branchId}": {
+      "schema": "Branch",
+      "description": "Corporate branches and warehouse locations"
+    },
+    "/transfers/{transferId}": {
+      "schema": "Transfer",
+      "description": "Inter-branch logistics and transit shipments"
+    },
+    "/timeline/{timelineId}": {
+      "schema": "TimelineEvent",
+      "description": "Audit trail log of all inventory operations"
+    },
+    "/emailLogs/{emailLogId}": {
+      "schema": "EmailNotification",
+      "description": "Dispatched email log"
+    },
+    "/loans/{loanId}": {
+      "schema": "EquipmentLoan",
+      "description": "Temporary equipment loan records"
+    },
+    "/systemUsers/{userId}": {
+      "schema": "SystemUser",
+      "description": "System access operators and RBAC role profiles"
+    }
+  }
+}

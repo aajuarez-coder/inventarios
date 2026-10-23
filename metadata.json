@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix ITAsset Pro - Sistema de Inventario y Gestión de Equipos de Cómputo",
+  "description": "Sistema integral de inventarios de hardware, asignaciones a colaboradores, cartas responsivas con firma digital, trazabilidad, cronograma de mantenimiento preventivo y alertas de garantías.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

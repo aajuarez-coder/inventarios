@@ -1,0 +1,16 @@
+services:
+  itasset-pro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_GOOGLE_MAPS_API_KEY: "${VITE_GOOGLE_MAPS_API_KEY:-AIzaSyDgOgyv812j6uSpT_WsLsEUfS-5HdSk1JI}"
+    image: petroil-itasset:latest
+    container_name: petroil-itasset
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=production
+    labels:
+      - "traefik.enable=false"

@@ -1,0 +1,31 @@
+[
+  {
+    "id": "agent-petroil-w11-test",
+    "hostname": "PETROIL-W11-TEST",
+    "platform": "windows",
+    "osVersion": "Microsoft Windows 11 Pro 64-bit (Build 22631.3880)",
+    "ipAddress": "192.168.1.185",
+    "macAddress": "00:1B:44:11:3A:B7",
+    "branchName": "Corporativo Torre Central",
+    "lastPing": "Hace unos segundos",
+    "lastPingTimestamp": 1792541172960,
+    "status": "online",
+    "specs": {
+      "cpu": "13th Gen Intel Core i7-13700K",
+      "ram": "32 GB DDR5",
+      "storage": "C: 1000GB (740GB libres)",
+      "serialNumber": "SN-W11-8849"
+    },
+    "rawPayload": {
+      "hostname": "PETROIL-W11-TEST",
+      "serialNumber": "SN-W11-8849",
+      "os": "Microsoft Windows 11 Pro 64-bit (Build 22631.3880)",
+      "cpu": "13th Gen Intel Core i7-13700K",
+      "ram": "32 GB DDR5",
+      "storage": "C: 1000GB (740GB libres)",
+      "ipAddress": "192.168.1.185",
+      "macAddress": "00:1B:44:11:3A:B7",
+      "branchName": "Corporativo Torre Central"
+    }
+  }
+]

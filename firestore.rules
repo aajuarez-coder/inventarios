@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper to check authentication
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    match /assets/{assetId} {
+      allow read, write: if true;
+    }
+
+    match /employees/{employeeId} {
+      allow read, write: if true;
+    }
+
+    match /assignments/{assignmentId} {
+      allow read, write: if true;
+    }
+
+    match /maintenanceRecords/{maintenanceId} {
+      allow read, write: if true;
+    }
+
+    match /branches/{branchId} {
+      allow read, write: if true;
+    }
+
+    match /transfers/{transferId} {
+      allow read, write: if true;
+    }
+
+    match /timeline/{timelineId} {
+      allow read, write: if true;
+    }
+
+    match /emailLogs/{emailLogId} {
+      allow read, write: if true;
+    }
+
+    match /loans/{loanId} {
+      allow read, write: if true;
+    }
+
+    match /systemUsers/{userId} {
+      allow read, write: if true;
+    }
+
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
