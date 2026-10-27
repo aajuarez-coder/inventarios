@@ -8,7 +8,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+
+function getPort(): number {
+  const portArgIndex = process.argv.indexOf('--port');
+  if (portArgIndex !== -1 && process.argv[portArgIndex + 1]) {
+    return Number(process.argv[portArgIndex + 1]) || 3000;
+  }
+  // In AI Studio Build, Nginx on 8080 proxies to port 3000. Never listen on 8080.
+  if (process.env.PORT && process.env.PORT !== '8080') {
+    return Number(process.env.PORT) || 3000;
+  }
+  return 3000;
+}
+
+const PORT = getPort();
 const TELEMETRY_FILE = path.join(__dirname, 'telemetry_store.json');
 const COMMANDS_FILE = path.join(__dirname, 'commands_store.json');
 
@@ -588,6 +601,12 @@ async function startServer() {
       app.get('*', (req, res) => {
         res.sendFile(path.resolve(distPath, 'index.html'));
       });
+    } else {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa'
+      });
+      app.use(vite.middlewares);
     }
   }
 
