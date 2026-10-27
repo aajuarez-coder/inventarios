@@ -413,6 +413,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
 
     setSystemUsers(prev => [newUser, ...prev]);
+    saveDocumentToFirestore(COLLECTIONS.SYSTEM_USERS, newId, newUser);
 
     logEvent({
       assetId: 'sys-user',
@@ -427,6 +428,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const updateSystemUser = (id: string, updates: Partial<AppUser>) => {
+    let updatedUser: AppUser | undefined;
     setSystemUsers(prev => prev.map(u => {
       if (u.id === id) {
         const newRole = updates.role || u.role;
@@ -437,6 +439,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           permissions: newPerms,
           canEdit: newPerms ? !newPerms.isReadOnly : u.canEdit
         };
+        updatedUser = updated;
         if (currentUser.id === id) {
           setCurrentUser(updated);
         }
@@ -444,6 +447,10 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       return u;
     }));
+
+    if (updatedUser) {
+      saveDocumentToFirestore(COLLECTIONS.SYSTEM_USERS, id, updatedUser);
+    }
 
     logEvent({
       assetId: 'sys-user',
@@ -471,6 +478,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return { success: false, error: 'Operación denegada: El sistema debe mantener al menos un Administrador Maestro activo.' };
     }
 
+    deleteDocumentFromFirestore(COLLECTIONS.SYSTEM_USERS, id);
     setSystemUsers(prev => prev.filter(u => u.id !== id));
 
     logEvent({
@@ -487,14 +495,14 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const toggleUserStatus = (id: string) => {
     if (currentUser.id === id) return;
-    setSystemUsers(prev => prev.map(u => {
-      if (u.id === id) {
-        const nextStatus = u.status === 'inactivo' ? 'activo' : 'inactivo';
-        return { ...u, status: nextStatus };
-      }
-      return u;
-    }));
-    triggerCloudSyncAnimation();
+    const target = systemUsers.find(u => u.id === id);
+    if (target) {
+      const nextStatus: 'activo' | 'inactivo' = target.status === 'inactivo' ? 'activo' : 'inactivo';
+      const updated: AppUser = { ...target, status: nextStatus };
+      saveDocumentToFirestore(COLLECTIONS.SYSTEM_USERS, id, updated);
+      setSystemUsers(prev => prev.map(u => u.id === id ? updated : u));
+      triggerCloudSyncAnimation();
+    }
   };
 
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
@@ -510,42 +518,42 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setAssets(remoteAssets);
         setLastCloudSyncTime(new Date().toLocaleTimeString());
       }
-    });
+    }, (err) => console.warn('[Firestore] Error en listener de assets:', err?.message));
 
     const unsubEmployees = onSnapshot(collection(firestoreDb, COLLECTIONS.EMPLOYEES), (snap) => {
       if (!snap.empty) {
         const remoteEmployees = snap.docs.map(d => d.data() as Employee);
         setEmployees(remoteEmployees);
       }
-    });
+    }, (err) => console.warn('[Firestore] Error en listener de employees:', err?.message));
 
     const unsubAssignments = onSnapshot(collection(firestoreDb, COLLECTIONS.ASSIGNMENTS), (snap) => {
       if (!snap.empty) {
         const remoteAsg = snap.docs.map(d => d.data() as Assignment);
         setAssignments(remoteAsg);
       }
-    });
+    }, (err) => console.warn('[Firestore] Error en listener de assignments:', err?.message));
 
     const unsubMaint = onSnapshot(collection(firestoreDb, COLLECTIONS.MAINTENANCE), (snap) => {
       if (!snap.empty) {
         const remoteMaint = snap.docs.map(d => d.data() as MaintenanceRecord);
         setMaintenanceRecords(remoteMaint);
       }
-    });
+    }, (err) => console.warn('[Firestore] Error en listener de maintenance:', err?.message));
 
     const unsubBranches = onSnapshot(collection(firestoreDb, COLLECTIONS.BRANCHES), (snap) => {
       if (!snap.empty) {
         const remoteBranches = snap.docs.map(d => d.data() as Branch);
         setBranches(remoteBranches);
       }
-    });
+    }, (err) => console.warn('[Firestore] Error en listener de branches:', err?.message));
 
     const unsubTransfers = onSnapshot(collection(firestoreDb, COLLECTIONS.TRANSFERS), (snap) => {
       if (!snap.empty) {
         const remoteTransfers = snap.docs.map(d => d.data() as Transfer);
         setTransfers(remoteTransfers);
       }
-    });
+    }, (err) => console.warn('[Firestore] Error en listener de transfers:', err?.message));
 
     const unsubTimeline = onSnapshot(collection(firestoreDb, COLLECTIONS.TIMELINE), (snap) => {
       if (!snap.empty) {
@@ -553,7 +561,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         remoteTl.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setTimeline(remoteTl);
       }
-    });
+    }, (err) => console.warn('[Firestore] Error en listener de timeline:', err?.message));
 
     const unsubEmailLogs = onSnapshot(collection(firestoreDb, COLLECTIONS.EMAIL_LOGS), (snap) => {
       if (!snap.empty) {
@@ -561,21 +569,21 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         remoteEmails.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
         setEmailLogs(remoteEmails);
       }
-    });
+    }, (err) => console.warn('[Firestore] Error en listener de email logs:', err?.message));
 
     const unsubLoans = onSnapshot(collection(firestoreDb, COLLECTIONS.LOANS), (snap) => {
       if (!snap.empty) {
         const remoteLoans = snap.docs.map(d => d.data() as EquipmentLoan);
         setLoans(remoteLoans);
       }
-    });
+    }, (err) => console.warn('[Firestore] Error en listener de loans:', err?.message));
 
     const unsubUsers = onSnapshot(collection(firestoreDb, COLLECTIONS.SYSTEM_USERS), (snap) => {
       if (!snap.empty) {
         const remoteUsers = snap.docs.map(d => d.data() as AppUser);
         setSystemUsers(remoteUsers);
       }
-    });
+    }, (err) => console.warn('[Firestore] Error en listener de system users:', err?.message));
 
     return () => {
       unsubAssets();
@@ -1202,13 +1210,24 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       ...branchData,
       id: newId
     };
+    saveDocumentToFirestore(COLLECTIONS.BRANCHES, newId, newBranch);
     setBranches(prev => [...prev, newBranch]);
     triggerCloudSyncAnimation();
     return newBranch;
   };
 
   const updateBranch = (id: string, updates: Partial<Branch>) => {
-    setBranches(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
+    let updatedBranch: Branch | undefined;
+    setBranches(prev => prev.map(b => {
+      if (b.id === id) {
+        updatedBranch = { ...b, ...updates };
+        return updatedBranch;
+      }
+      return b;
+    }));
+    if (updatedBranch) {
+      saveDocumentToFirestore(COLLECTIONS.BRANCHES, id, updatedBranch);
+    }
     triggerCloudSyncAnimation();
   };
 
@@ -1241,6 +1260,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       };
     }
 
+    deleteDocumentFromFirestore(COLLECTIONS.BRANCHES, id);
     setBranches(prev => prev.filter(b => b.id !== id));
     logEvent({
       assetId: 'sucursal-baja',
@@ -1283,17 +1303,20 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       createdAt: new Date().toISOString()
     };
 
+    saveDocumentToFirestore(COLLECTIONS.LOANS, newId, newLoan);
     setLoans(prev => [newLoan, ...prev]);
 
     // Update asset status to asignado
     setAssets(prev => prev.map(a => {
       if (a.id === loanData.assetId) {
-        return {
+        const updatedAsset = {
           ...a,
-          status: 'asignado',
+          status: 'asignado' as const,
           assignedToEmployeeId: loanData.employeeId,
           assignedDate: loanData.startDate
         };
+        saveDocumentToFirestore(COLLECTIONS.ASSETS, a.id, updatedAsset);
+        return updatedAsset;
       }
       return a;
     }));
@@ -1325,9 +1348,10 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     const returnDate = new Date().toISOString();
 
+    let updatedLoanObj: EquipmentLoan | undefined;
     setLoans(prev => prev.map(l => {
       if (l.id === loanId) {
-        return {
+        updatedLoanObj = {
           ...l,
           status: 'devuelto',
           actualReturnDate: returnDate,
@@ -1337,9 +1361,13 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           employeeSignatureReturn,
           itSignatureReturn
         };
+        return updatedLoanObj;
       }
       return l;
     }));
+    if (updatedLoanObj) {
+      saveDocumentToFirestore(COLLECTIONS.LOANS, loanId, updatedLoanObj);
+    }
 
     // Free asset to disponible
     setAssets(prev => prev.map(a => {
@@ -1370,10 +1398,19 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const loan = loans.find(l => l.id === loanId);
     if (!loan) return;
 
-    setLoans(prev => prev.map(l => l.id === loanId ? { ...l, status: 'cancelado', returnNotes: `Cancelado: ${reason}` } : l));
+    const updatedLoan = { ...loan, status: 'cancelado' as const, returnNotes: `Cancelado: ${reason}` };
+    saveDocumentToFirestore(COLLECTIONS.LOANS, loanId, updatedLoan);
+    setLoans(prev => prev.map(l => l.id === loanId ? updatedLoan : l));
 
     // Restore asset
-    setAssets(prev => prev.map(a => a.id === loan.assetId ? { ...a, status: 'disponible', assignedToEmployeeId: undefined } : a));
+    setAssets(prev => prev.map(a => {
+      if (a.id === loan.assetId) {
+        const restored = { ...a, status: 'disponible' as const, assignedToEmployeeId: undefined };
+        saveDocumentToFirestore(COLLECTIONS.ASSETS, a.id, restored);
+        return restored;
+      }
+      return a;
+    }));
 
     logEvent({
       assetId: loan.assetId,

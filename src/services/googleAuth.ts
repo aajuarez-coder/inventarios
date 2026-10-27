@@ -74,6 +74,17 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
       console.info('[Google Auth] Ventana emergente cerrada o cancelada por el usuario.');
       return null;
     }
+
+    if (error?.code === 'auth/unauthorized-domain' || error?.message?.includes('unauthorized-domain')) {
+      const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'Netlify';
+      const friendlyError = new Error(
+        `Dominio no autorizado (${currentHost}). Para usar Google Auth en Netlify, añade "${currentHost}" en Firebase Console > Authentication > Settings > Authorized domains.`
+      );
+      (friendlyError as any).code = 'auth/unauthorized-domain';
+      console.error('[Google Auth] Error de dominio no autorizado:', friendlyError.message);
+      throw friendlyError;
+    }
+
     console.error('Google Sign in error:', error);
     throw error;
   } finally {
