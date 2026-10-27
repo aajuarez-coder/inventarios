@@ -33,7 +33,8 @@ import {
   Printer as PrinterIcon,
   RotateCcw,
   FileSpreadsheet,
-  Upload
+  Upload,
+  Trash2
 } from 'lucide-react';
 import { formatCurrency, formatDate, getWarrantyStatus, getMaintenanceStatus, getStatusBadge, getConditionLabel } from '../utils/formatters';
 import { AssetDetailModal } from './AssetDetailModal';
@@ -60,12 +61,13 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
   onOpenMap,
   externalSearch = ''
 }) => {
-  const { assets, branches, employees, addAsset, returnAsset, currentUser, canEdit, isViewer } = useInventory();
+  const { assets, branches, employees, addAsset, returnAsset, deleteAsset, currentUser, canEdit, isViewer } = useInventory();
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [filterObsoleteOnly, setFilterObsoleteOnly] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [detailAsset, setDetailAsset] = useState<HardwareAsset | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -76,6 +78,23 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
   const [pdfMessage, setPdfMessage] = useState<string | null>(null);
   const [csvMessage, setCsvMessage] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
+
+  // Asset Deletion state (for decommissioned / 'baja' & obsolete / 'obsoleto' assets)
+  const [assetToDelete, setAssetToDelete] = useState<HardwareAsset | null>(null);
+  const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
+
+  const handleConfirmDelete = () => {
+    if (!assetToDelete) return;
+    const tag = assetToDelete.assetTag;
+    const name = `${assetToDelete.brand} ${assetToDelete.model}`;
+    deleteAsset(assetToDelete.id);
+    setDeleteFeedback(`Equipo ${tag} (${name}) eliminado permanentemente del catálogo e inventario.`);
+    setTimeout(() => setDeleteFeedback(null), 5000);
+    setAssetToDelete(null);
+    if (detailAsset?.id === assetToDelete.id) {
+      setDetailAsset(null);
+    }
+  };
 
   const handleExportCsv = () => {
     const result = exportHardwareInventoryCsv(filteredAssets, branches, employees);
@@ -137,6 +156,8 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
     notes: ''
   });
 
+  const obsoleteOrBajaAssets = assets.filter(a => a.status === 'baja' || a.physicalCondition === 'obsoleto');
+
   const query = (externalSearch || search).toLowerCase();
 
   const filteredAssets = assets.filter(asset => {
@@ -151,8 +172,9 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
     const matchesCategory = selectedCategory === 'all' || asset.category === selectedCategory;
     const matchesStatus = selectedStatus === 'all' || asset.status === selectedStatus;
     const matchesBranch = selectedBranch === 'all' || asset.branchId === selectedBranch;
+    const matchesObsolete = !filterObsoleteOnly || (asset.status === 'baja' || asset.physicalCondition === 'obsoleto');
 
-    return matchesSearch && matchesCategory && matchesStatus && matchesBranch;
+    return matchesSearch && matchesCategory && matchesStatus && matchesBranch && matchesObsolete;
   });
 
   const handleCreateSubmit = (e: React.FormEvent) => {
@@ -389,6 +411,24 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
         </div>
       )}
 
+      {/* Asset Deletion Success notification */}
+      {deleteFeedback && (
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-950 text-xs flex items-center justify-between shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1 rounded-md bg-rose-100 text-rose-700">
+              <Trash2 className="w-4 h-4 shrink-0" />
+            </div>
+            <span className="font-semibold">{deleteFeedback}</span>
+          </div>
+          <button
+            onClick={() => setDeleteFeedback(null)}
+            className="text-rose-800 hover:text-rose-950 font-bold ml-3 text-sm cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Permission alert banner if triggered */}
       {permissionNotice && (
         <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-center justify-between shadow-xs animate-in fade-in">
@@ -500,12 +540,33 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
             ))}
           </select>
 
-          {(selectedCategory !== 'all' || selectedStatus !== 'all' || selectedBranch !== 'all' || search) && (
+          {/* Quick filter for Obsolete / Decommissioned equipment */}
+          {obsoleteOrBajaAssets.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilterObsoleteOnly(prev => !prev)}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                filterObsoleteOnly
+                  ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
+                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+              }`}
+              title="Filtrar únicamente equipos dados de baja o clasificados como obsoletos para depuración o eliminación"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Baja / Obsoletos ({obsoleteOrBajaAssets.length})</span>
+              {filterObsoleteOnly && (
+                <span className="text-[10px] bg-rose-700 px-1.5 py-0.2 rounded text-white font-mono">Activo</span>
+              )}
+            </button>
+          )}
+
+          {(selectedCategory !== 'all' || selectedStatus !== 'all' || selectedBranch !== 'all' || filterObsoleteOnly || search) && (
             <button
               onClick={() => {
                 setSelectedCategory('all');
                 setSelectedStatus('all');
                 setSelectedBranch('all');
+                setFilterObsoleteOnly(false);
                 setSearch('');
               }}
               className="text-indigo-600 hover:text-indigo-800 text-xs font-medium ml-auto"
@@ -669,6 +730,32 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                             >
                               <ShieldAlert className="w-4 h-4" />
                             </button>
+
+                            {/* Botón de Eliminar Activo (Especialmente visible para equipos dados de baja u obsoletos) */}
+                            {canEdit && (
+                              <button
+                                onClick={() => {
+                                  if (asset.status === 'asignado') {
+                                    setPermissionNotice(`No es posible eliminar el equipo ${asset.assetTag} mientras esté asignado a un colaborador. Debe registrarse primero su devolución a almacén.`);
+                                    setTimeout(() => setPermissionNotice(null), 6000);
+                                    return;
+                                  }
+                                  setAssetToDelete(asset);
+                                }}
+                                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                  asset.status === 'baja' || asset.physicalCondition === 'obsoleto'
+                                    ? 'text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 border border-rose-200'
+                                    : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                                }`}
+                                title={
+                                  asset.status === 'baja' || asset.physicalCondition === 'obsoleto'
+                                    ? 'Eliminar definitivamente este equipo dado de baja u obsoleto del catálogo'
+                                    : 'Eliminar equipo del catálogo'
+                                }
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -740,7 +827,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                   <span className="text-slate-500 truncate max-w-[130px]">
                     {emp ? emp.fullName : 'Disponible'}
                   </span>
-                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5">
                     {asset.status === 'asignado' && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleOpenReturnModal(asset); }}
@@ -749,6 +836,31 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                       >
                         <RotateCcw className="w-3 h-3 text-amber-600" />
                         <span>Devolver</span>
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (asset.status === 'asignado') {
+                            setPermissionNotice(`No es posible eliminar el equipo ${asset.assetTag} mientras esté asignado a un colaborador. Debe registrarse primero su devolución a almacén.`);
+                            setTimeout(() => setPermissionNotice(null), 6000);
+                            return;
+                          }
+                          setAssetToDelete(asset);
+                        }}
+                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                          asset.status === 'baja' || asset.physicalCondition === 'obsoleto'
+                            ? 'text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 border border-rose-200'
+                            : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                        }`}
+                        title={
+                          asset.status === 'baja' || asset.physicalCondition === 'obsoleto'
+                            ? 'Eliminar definitivamente este equipo dado de baja u obsoleto'
+                            : 'Eliminar equipo'
+                        }
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                     <button
@@ -774,6 +886,109 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
           onOpenMaintenance={onOpenMaintenance}
           onOpenMap={onOpenMap}
         />
+      )}
+
+      {/* Delete Confirmation Modal for Decommissioned / Obsolete Assets */}
+      {assetToDelete && (
+        <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-slate-200 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5 text-rose-600">
+                <div className="p-2 rounded-xl bg-rose-100 text-rose-600">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">Eliminar Equipo Definitivamente</h3>
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    {assetToDelete.assetTag}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setAssetToDelete(null)} 
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Asset quick card */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+              <div className="flex justify-between items-start">
+                <span className="text-slate-500">Equipo:</span>
+                <span className="font-semibold text-slate-900 text-right">
+                  {assetToDelete.brand} {assetToDelete.model}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Serie (S/N):</span>
+                <span className="font-mono text-slate-700">{assetToDelete.serialNumber}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Estado / Condición:</span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${getStatusBadge(assetToDelete.status).className}`}>
+                    {getStatusBadge(assetToDelete.status).label}
+                  </span>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 ${getConditionLabel(assetToDelete.physicalCondition).color}`}>
+                    {getConditionLabel(assetToDelete.physicalCondition).label}
+                  </span>
+                </div>
+              </div>
+              {assetToDelete.notes && (
+                <div className="pt-1.5 border-t border-slate-200/60 text-[11px] text-slate-600">
+                  <span className="font-semibold block text-slate-700">Notas técnicas:</span>
+                  <p className="truncate italic">{assetToDelete.notes}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Reason highlight */}
+            {(assetToDelete.status === 'baja' || assetToDelete.physicalCondition === 'obsoleto') ? (
+              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Equipo apto para depuración</p>
+                  <p className="text-[11px] text-amber-800 mt-0.5">
+                    Este equipo está catalogado como <strong>{assetToDelete.status === 'baja' ? 'Dado de Baja' : ''}{assetToDelete.status === 'baja' && assetToDelete.physicalCondition === 'obsoleto' ? ' y ' : ''}{assetToDelete.physicalCondition === 'obsoleto' ? 'Físicamente Obsoleto' : ''}</strong>. Al confirmar, se depurará del catálogo de inventario activo.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-rose-50/80 border border-rose-200 rounded-xl text-xs text-rose-900 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Advertencia de depuración</p>
+                  <p className="text-[11px] text-rose-800 mt-0.5">
+                    La eliminación es permanente en Firestore y solo debe realizarse si el equipo fue dado de baja o registrado por error.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <p className="text-[11px] text-slate-500">
+              * Se eliminará el registro de Firestore y se guardará un evento formal de baja en la bitácora de auditoría y trazabilidad con su firma de usuario.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setAssetToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Confirmar y Eliminar</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Register New Asset Modal */}

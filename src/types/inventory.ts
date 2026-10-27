@@ -15,7 +15,7 @@ export type AssetStatus =
   | 'baja'       // Desechado / Obsoleto
   | 'traslado';   // En tránsito entre sucursales
 
-export type PhysicalCondition = 'excelente' | 'bueno' | 'regular' | 'dañado';
+export type PhysicalCondition = 'excelente' | 'bueno' | 'regular' | 'dañado' | 'obsoleto';
 
 export interface HardwareSpecs {
   cpu: string;

@@ -64,6 +64,16 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     cachedAccessToken = credential.accessToken;
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
+    // If the user closed the popup or cancelled the sign-in request, handle gracefully
+    if (
+      error?.code === 'auth/popup-closed-by-user' ||
+      error?.code === 'auth/cancelled-popup-request' ||
+      error?.message?.includes('popup-closed-by-user') ||
+      error?.message?.includes('cancelled-popup-request')
+    ) {
+      console.info('[Google Auth] Ventana emergente cerrada o cancelada por el usuario.');
+      return null;
+    }
     console.error('Google Sign in error:', error);
     throw error;
   } finally {

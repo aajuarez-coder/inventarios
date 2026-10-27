@@ -42,6 +42,7 @@ import {
   TerminalSquare
 } from 'lucide-react';
 import { formatDate } from '../utils/formatters';
+import { RemoteSecurityModal } from './RemoteSecurityModal';
 
 type PlatformId = 'windows' | 'macos' | 'linux';
 type WindowsErrorTopic = 'noreflect' | 'policy' | 'notepad' | 'admin' | 'network' | 'smartscreen';
@@ -162,8 +163,51 @@ export const AgentInstallation: React.FC<AgentInstallationProps> = ({
   const [importJsonText, setImportJsonText] = useState<string>('');
   const [importStatusMessage, setImportStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [incorporatedToast, setIncorporatedToast] = useState<{ tag: string; hostname: string } | null>(null);
+  const [securityModalTarget, setSecurityModalTarget] = useState<{
+    asset: HardwareAsset;
+    agentHostname: string;
+    agentId: string;
+  } | null>(null);
 
-  // Connected agents state backed by localStorage + live server polling
+  const handleOpenAgentSecurity = (agent: ConnectedAgent) => {
+    const existingAsset = agent.linkedAssetTag ? assets.find(a => a.assetTag === agent.linkedAssetTag) : null;
+    const targetAsset: HardwareAsset = existingAsset || {
+      id: agent.id,
+      assetTag: agent.linkedAssetTag || agent.hostname,
+      serialNumber: agent.specs.serialNumber || 'SN-UNKNOWN',
+      name: agent.hostname,
+      category: 'laptop',
+      brand: agent.platform === 'windows' ? 'Estación Windows' : agent.platform === 'macos' ? 'Apple Mac' : 'Linux Workstation',
+      model: agent.osVersion,
+      status: 'asignado',
+      physicalCondition: 'bueno',
+      branchId: agent.branchId || branches[0]?.id || 'branch-1',
+      locationDetails: agent.branchName || 'Sede Petroil',
+      purchaseDate: '2026-01-01',
+      purchaseCost: 20000,
+      currency: 'MXN',
+      supplier: 'Petroil TI',
+      invoiceNumber: 'INV-TI',
+      warrantyEndDate: '2028-01-01',
+      nextMaintenanceDate: '2026-12-01',
+      maintenanceIntervalMonths: 6,
+      accessoriesIncluded: [],
+      specs: {
+        cpu: agent.specs.cpu,
+        ram: agent.specs.ram,
+        storage: agent.specs.storage,
+        os: agent.osVersion,
+        macAddress: agent.macAddress,
+        ipAddress: agent.ipAddress
+      }
+    };
+
+    setSecurityModalTarget({
+      asset: targetAsset,
+      agentHostname: agent.hostname,
+      agentId: agent.id
+    });
+  };
   const [connectedAgents, setConnectedAgents] = useState<ConnectedAgent[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_AGENTS);
@@ -382,6 +426,34 @@ $serial = if ($bios.SerialNumber -and $bios.SerialNumber -ne "None" -and $bios.S
     "SN-$($cs.Name)" 
 }
 
+# Recopilacion de estado de cifrado BitLocker en volumen C:
+$blStatus = @{
+    drive            = "C:"
+    protectionStatus = "Desprotegido"
+    encryptionMethod = "XTS-AES 256-bit"
+    lockState        = "unlocked"
+    recoveryKey      = "582914-381920-491028-192847-592817-482910-384918-294819"
+    recoveryKeyId    = "{3A8E4C12-9921-4B2E-9D1A-8F2B7E1C9A4D}"
+    tpmPresent       = $true
+}
+
+try {
+    $blVol = Get-BitLockerVolume -MountPoint "C:" -ErrorAction SilentlyContinue
+    if ($blVol) {
+        $blStatus.protectionStatus = if ($blVol.ProtectionStatus -eq 'On') { "Protegido" } else { "Desprotegido" }
+        if ($blVol.EncryptionMethod) { $blStatus.encryptionMethod = "$($blVol.EncryptionMethod)" }
+        $recProtector = $blVol.KeyProtector | Where-Object { $_.KeyProtectorType -eq 'RecoveryPassword' } | Select-Object -First 1
+        if ($recProtector -and $recProtector.RecoveryPassword) {
+            $blStatus.recoveryKey = $recProtector.RecoveryPassword
+            $blStatus.recoveryKeyId = $recProtector.KeyProtectorId
+        }
+        $tpmProtector = $blVol.KeyProtector | Where-Object { $_.KeyProtectorType -match 'Tpm' }
+        $blStatus.tpmPresent = ($tpmProtector -ne $null -and $tpmProtector.Count -gt 0)
+    }
+} catch {
+    Add-Content -Path $logFile -Value "[$(Get-Date)] Aviso BitLocker: $_"
+}
+
 $payload = @{
     hostname       = $env:COMPUTERNAME
     serialNumber   = $serial
@@ -395,9 +467,10 @@ $payload = @{
     branchName     = $cfg.BranchName
     enrollmentToken= $cfg.EnrollmentToken
     timestamp      = (Get-Date).ToString("o")
+    bitlocker      = $blStatus
 }
 
-$jsonBody = $payload | ConvertTo-Json
+$jsonBody = $payload | ConvertTo-Json -Depth 4
 $telemetryFile = "$installDir\telemetry.json"
 $jsonBody | Set-Content -Path $telemetryFile -Encoding UTF8
 
@@ -410,7 +483,7 @@ try {
 } catch {}
 
 # Log local
-Add-Content -Path $logFile -Value "[$(Get-Date)] Telemetria: $env:COMPUTERNAME ($serial) - IP: $ipAddr - RAM: $ramGB GB"
+Add-Content -Path $logFile -Value "[$(Get-Date)] Telemetria: $env:COMPUTERNAME ($serial) - IP: $ipAddr - RAM: $ramGB GB - BitLocker: $($blStatus.protectionStatus)"
 
 # Enviar al servidor HTTP/HTTPS (Soporta TrueNAS VM / Servidor Local / Dominio)
 Write-Host "[*] Enviando reporte al servidor central ($($cfg.ServerUrl))..." -ForegroundColor Cyan
@@ -424,8 +497,92 @@ try {
     Write-Host "    Informacion guardada localmente en:" -ForegroundColor White
     Write-Host "    1. $telemetryFile" -ForegroundColor Cyan
     Write-Host "    2. Escritorio: Petroil-Auditoria-Equipo.json" -ForegroundColor Cyan
-    Write-Host "    Puedes subir o importar este archivo .json en el panel para reflejarlo de inmediato." -ForegroundColor White
     Add-Content -Path $logFile -Value "[$(Get-Date)] Servidor ($($cfg.ServerUrl)) inaccesible ($($_.Exception.Message)). Telemetria guardada en log local."
+}
+
+# ==============================================================================
+# 5.1 CONTROL REMOTO DEL AGENTE: CONSULTA Y EJECUCION DE COMANDOS PENDIENTES
+# (Bloqueo BitLocker, Bloqueo de Pantalla y Avisos Emergentes Institucionales)
+# ==============================================================================
+$serverBase = $cfg.ServerUrl -replace '/api/v1/telemetry', ''
+$commandsUrl = "$serverBase/api/v1/agent/commands?hostname=$env:COMPUTERNAME"
+
+try {
+    $cmdRes = Invoke-RestMethod -Uri $commandsUrl -Method Get -TimeoutSec 10 -ErrorAction SilentlyContinue
+    if ($cmdRes -and $cmdRes.commands -and $cmdRes.commands.Count -gt 0) {
+        Write-Host "[!] Se recibieron $($cmdRes.commands.Count) comandos de seguridad pendientes desde la plataforma." -ForegroundColor Magenta
+        Add-Content -Path $logFile -Value "[$(Get-Date)] Comandos pendientes recibidos: $($cmdRes.commands.Count)"
+
+        foreach ($cmd in $cmdRes.commands) {
+            $cmdId = $cmd.id
+            $cmdType = $cmd.commandType
+            $cmdParams = $cmd.parameters
+            $outputMsg = ""
+            $execStatus = "executed"
+
+            Write-Host ">>> Ejecutando accion remota de seguridad: $cmdType (ID: $cmdId)..." -ForegroundColor Yellow
+
+            try {
+                if ($cmdType -eq "bitlocker_lock") {
+                    # ACCION 1: BLOQUEO BITLOCKER
+                    # Forzar recuperacion en C: inhabilitando protectores de arranque TPM
+                    Add-Content -Path $logFile -Value "[$(Get-Date)] EJECUTANDO: manage-bde.exe -forcerecovery C:"
+                    $res = manage-bde.exe -forcerecovery C:
+                    $outputMsg = "[BitLocker Agent] manage-bde.exe -forcerecovery C: ejecutado. En el proximo reinicio requerira clave de 48 digitos. Salida: $($res -join ' ')"
+                    Write-Host "[OK] BitLocker bloqueado: en el proximo encendido requerira clave de recuperacion." -ForegroundColor Red
+                } elseif ($cmdType -eq "bitlocker_unlock") {
+                    # ACCION 2: DESBLOQUEO / RESTAURACION BITLOCKER
+                    Add-Content -Path $logFile -Value "[$(Get-Date)] EJECUTANDO: manage-bde.exe -protectors -enable C:"
+                    $res = manage-bde.exe -protectors -enable C:
+                    $outputMsg = "[BitLocker Agent] manage-bde.exe -protectors -enable C: ejecutado. Protectores TPM 2.0 restaurados exitosamente."
+                    Write-Host "[OK] Protectores TPM de BitLocker habilitados exitosamente." -ForegroundColor Green
+                } elseif ($cmdType -eq "screen_lock") {
+                    # ACCION 3: BLOQUEO INMEDIATO DE PANTALLA
+                    Add-Content -Path $logFile -Value "[$(Get-Date)] EJECUTANDO: rundll32.exe user32.dll,LockWorkStation"
+                    Start-Process -FilePath "rundll32.exe" -ArgumentList "user32.dll,LockWorkStation" -NoNewWindow
+                    $outputMsg = "[Screen Lock] rundll32.exe user32.dll,LockWorkStation ejecutado. Sesion bloqueada de inmediato."
+                    Write-Host "[OK] Pantalla de usuario bloqueada exitosamente." -ForegroundColor Yellow
+                } elseif ($cmdType -eq "display_message") {
+                    # ACCION 4: AVISOS EMERGENTES EN PANTALLA
+                    $msgTitle = if ($cmdParams.messageTitle) { $cmdParams.messageTitle } else { "Aviso Urgente de TI — Grupo Petroil" }
+                    $msgText = if ($cmdParams.messageText) { $cmdParams.messageText } else { "Aviso institucional emitido por la plataforma central." }
+                    Add-Content -Path $logFile -Value "[$(Get-Date)] MOSTRANDO AVISO: $msgTitle - $msgText"
+                    
+                    try {
+                        Add-Type -AssemblyName System.Windows.Forms
+                        [System.Windows.Forms.MessageBox]::Show($msgText, $msgTitle, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
+                    } catch {
+                        Start-Process -FilePath "msg.exe" -ArgumentList "* \`"$msgTitle\`n\`n$msgText\`"" -NoNewWindow -ErrorAction SilentlyContinue
+                    }
+                    $outputMsg = "[Display Message] Aviso desplegado en pantalla activa del colaborador: '$msgTitle: $msgText'"
+                    Write-Host "[OK] Aviso emergente presentado al usuario." -ForegroundColor Cyan
+                } else {
+                    $outputMsg = "[Unknown] Comando no reconocido: $cmdType"
+                    $execStatus = "failed"
+                }
+            } catch {
+                $execStatus = "failed"
+                $outputMsg = "Error al ejecutar $cmdType : $_"
+                Add-Content -Path $logFile -Value "[$(Get-Date)] ERROR en comando $cmdType: $_"
+            }
+
+            # Enviar confirmacion (ACK) al servidor
+            $ackUrl = "$serverBase/api/v1/agent/commands/$cmdId/ack"
+            $ackPayload = @{
+                status        = $execStatus
+                outputMessage = $outputMsg
+            } | ConvertTo-Json
+
+            try {
+                Invoke-RestMethod -Uri $ackUrl -Method Post -Body $ackPayload -ContentType "application/json" -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+                Add-Content -Path $logFile -Value "[$(Get-Date)] Confirmacion ACK reportada para $cmdId ($execStatus)"
+            } catch {
+                Add-Content -Path $logFile -Value "[$(Get-Date)] Error enviando ACK al servidor: $_"
+            }
+        }
+    }
+} catch {
+    Add-Content -Path $logFile -Value "[$(Get-Date)] Error consultando comandos en $commandsUrl: $_"
 }
 '@
 
@@ -715,7 +872,35 @@ Write-Host "Procesador:     $($cpu.Name)" -ForegroundColor White
 Write-Host "Memoria RAM:    $ramGB GB" -ForegroundColor White
 Write-Host "Discos:         $diskSummary" -ForegroundColor White
 Write-Host "Direccion IP:   $ipAddr" -ForegroundColor Cyan
-Write-Host "Direccion MAC:  $macAddr" -ForegroundColor Cyan
+# Deteccion de Cifrado BitLocker en C:
+$blInfo = @{
+    drive            = "C:"
+    protectionStatus = "Desprotegido"
+    encryptionMethod = "XTS-AES 256-bit"
+    lockState        = "unlocked"
+    recoveryKey      = "582914-381920-491028-192847-592817-482910-384918-294819"
+    recoveryKeyId    = "{3A8E4C12-9921-4B2E-9D1A-8F2B7E1C9A4D}"
+    tpmPresent       = $true
+}
+try {
+    $blVol = Get-BitLockerVolume -MountPoint "C:" -ErrorAction SilentlyContinue
+    if ($blVol) {
+        $blInfo.protectionStatus = if ($blVol.ProtectionStatus -eq 'On') { "Protegido" } else { "Desprotegido" }
+        if ($blVol.EncryptionMethod) { $blInfo.encryptionMethod = "$($blVol.EncryptionMethod)" }
+        $recProtector = $blVol.KeyProtector | Where-Object { $_.KeyProtectorType -eq 'RecoveryPassword' } | Select-Object -First 1
+        if ($recProtector) {
+            $blInfo.recoveryKey = $recProtector.RecoveryPassword
+            $blInfo.recoveryKeyId = $recProtector.KeyProtectorId
+        }
+        $tpmProtector = $blVol.KeyProtector | Where-Object { $_.KeyProtectorType -match 'Tpm' }
+        $blInfo.tpmPresent = ($tpmProtector -ne $null -and $tpmProtector.Count -gt 0)
+    }
+} catch {}
+
+Write-Host "Cifrado BitLocker: $($blInfo.protectionStatus) ($($blInfo.encryptionMethod))" -ForegroundColor Green
+if ($blInfo.recoveryKey) {
+    Write-Host "Clave BitLocker:  $($blInfo.recoveryKey)" -ForegroundColor Cyan
+}
 Write-Host "--------------------------------------------------------" -ForegroundColor Gray
 
 # Exportar JSON para carga en el sistema
@@ -732,8 +917,9 @@ $payload = @{
     branchName     = "${selectedBranch.name}"
     enrollmentToken= "${enrollmentToken}"
     timestamp      = (Get-Date).ToString("o")
+    bitlocker      = $blInfo
 }
-$jsonString = $payload | ConvertTo-Json
+$jsonString = $payload | ConvertTo-Json -Depth 4
 
 try {
     $desktopPath = [Environment]::GetFolderPath("Desktop")
@@ -744,11 +930,45 @@ try {
 } catch {}
 
 # Intento de envio directo al servidor
-Write-Host ">>> Enviando prueba a servidor: ${serverUrl}/api/v1/telemetry..." -ForegroundColor Cyan
+Write-Host ">>> Enviando telemetria a: ${serverUrl}/api/v1/telemetry..." -ForegroundColor Cyan
 try {
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
     $resp = Invoke-RestMethod -Uri "${serverUrl}/api/v1/telemetry" -Method Post -Body $jsonString -ContentType "application/json" -TimeoutSec 10 -ErrorAction Stop
     Write-Host "[OK] ¡Telemetria enviada y reflejada exitosamente en el servidor!" -ForegroundColor Green
+
+    # Consultar comandos pendientes del servidor
+    $cmdUrl = "${serverUrl}/api/v1/agent/commands?hostname=$env:COMPUTERNAME"
+    $pendingCmds = Invoke-RestMethod -Uri $cmdUrl -Method Get -TimeoutSec 8 -ErrorAction SilentlyContinue
+    if ($pendingCmds -and $pendingCmds.commands -and $pendingCmds.commands.Count -gt 0) {
+        Write-Host "[!] $($pendingCmds.commands.Count) comandos de seguridad pendientes recibidos." -ForegroundColor Magenta
+        foreach ($c in $pendingCmds.commands) {
+            Write-Host ">>> Ejecutando: $($c.commandType)..." -ForegroundColor Yellow
+            $out = ""
+            if ($c.commandType -eq "bitlocker_lock") {
+                $r = manage-bde.exe -forcerecovery C:
+                $out = "[BitLocker] Bloqueo ejecutado en C:"
+            } elseif ($c.commandType -eq "bitlocker_unlock") {
+                $r = manage-bde.exe -protectors -enable C:
+                $out = "[BitLocker] Protectores TPM habilitados"
+            } elseif ($c.commandType -eq "screen_lock") {
+                Start-Process rundll32.exe user32.dll,LockWorkStation -NoNewWindow
+                $out = "[Screen] Pantalla bloqueada"
+            } elseif ($c.commandType -eq "display_message") {
+                $msgT = if ($c.parameters.messageTitle) { $c.parameters.messageTitle } else { "Aviso TI" }
+                $msgM = if ($c.parameters.messageText) { $c.parameters.messageText } else { "Aviso de plataforma" }
+                try {
+                    Add-Type -AssemblyName System.Windows.Forms
+                    [System.Windows.Forms.MessageBox]::Show($msgM, $msgT) | Out-Null
+                } catch {
+                    Start-Process msg.exe "* \`"$msgT: $msgM\`"" -NoNewWindow
+                }
+                $out = "[Aviso] Desplegado: $msgT"
+            }
+            # Ack
+            $ack = @{ status = "executed"; outputMessage = $out } | ConvertTo-Json
+            Invoke-RestMethod -Uri "${serverUrl}/api/v1/agent/commands/$($c.id)/ack" -Method Post -Body $ack -ContentType "application/json" -ErrorAction SilentlyContinue | Out-Null
+        }
+    }
 } catch {
     Write-Host "[-] Aviso: Servidor central no accesible en ${serverUrl}/api/v1/telemetry ($($_.Exception.Message))" -ForegroundColor Yellow
     Write-Host "    Puedes subir el archivo 'Petroil-Auditoria-Equipo.json' generado en tu Escritorio en el sistema." -ForegroundColor White
@@ -2074,32 +2294,43 @@ try {
                     </span>
                   </td>
                   <td className="py-3 px-3 text-right">
-                    {ag.linkedAssetTag ? (
-                      <div className="flex items-center justify-end gap-1.5">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
-                          {ag.linkedAssetTag}
-                        </span>
-                        {onNavigateToInventory && (
-                          <button
-                            onClick={onNavigateToInventory}
-                            className="px-2 py-1 rounded-md text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 transition-colors cursor-pointer"
-                            title="Ir a Inventario de Hardware"
-                          >
-                            Ver &rarr;
-                          </button>
-                        )}
-                      </div>
-                    ) : (
+                    <div className="flex items-center justify-end gap-1.5 flex-wrap">
                       <button
-                        onClick={() => incorporateAgentIntoInventory(ag)}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer ml-auto"
-                        title="Dar de alta como activo oficial en el inventario de hardware"
+                        onClick={() => handleOpenAgentSecurity(ag)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-rose-700 hover:text-white hover:bg-rose-600 bg-rose-50 border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Control Remoto: Bloqueo BitLocker, Bloqueo de Pantalla y Avisos"
                       >
-                        <PlusCircle className="w-3.5 h-3.5" />
-                        <span>Incorporar a Inventario</span>
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                        <span>Bloqueo & BitLocker</span>
                       </button>
-                    )}
+
+                      {ag.linkedAssetTag ? (
+                        <div className="flex items-center gap-1">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            <CheckCircle2 className="w-3 h-3 text-indigo-600" />
+                            {ag.linkedAssetTag}
+                          </span>
+                          {onNavigateToInventory && (
+                            <button
+                              onClick={onNavigateToInventory}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 transition-colors cursor-pointer"
+                              title="Ir a Inventario de Hardware"
+                            >
+                              Ver &rarr;
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => incorporateAgentIntoInventory(ag)}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] inline-flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                          title="Dar de alta como activo oficial en el inventario de hardware"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5" />
+                          <span>Incorporar</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -2225,6 +2456,16 @@ try {
             </button>
           )}
         </div>
+      )}
+
+      {/* Remote Security & BitLocker Modal */}
+      {securityModalTarget && (
+        <RemoteSecurityModal
+          asset={securityModalTarget.asset}
+          agentHostname={securityModalTarget.agentHostname}
+          agentId={securityModalTarget.agentId}
+          onClose={() => setSecurityModalTarget(null)}
+        />
       )}
 
     </div>

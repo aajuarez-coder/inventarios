@@ -86,8 +86,22 @@ export const GmailProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         return true;
       }
+      // Result is null when user closes popup or cancels
       return false;
     } catch (err: any) {
+      if (
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.message?.includes('popup-closed-by-user') ||
+        err?.message?.includes('cancelled-popup-request')
+      ) {
+        // User closed or cancelled popup - not an application failure
+        return false;
+      }
+      if (err?.code === 'auth/popup-blocked' || err?.message?.includes('popup-blocked')) {
+        setError('La ventana emergente de Google fue bloqueada por el navegador. Habilite las ventanas emergentes para continuar.');
+        return false;
+      }
       console.error('Connection failed:', err);
       setError(err?.message || 'Error al conectar con Google/Gmail');
       return false;

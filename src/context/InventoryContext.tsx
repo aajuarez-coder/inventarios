@@ -55,7 +55,9 @@ interface InventoryContextType {
   lastCloudSyncTime: string;
   
   // Auth & Session
-  login: (email: string, password?: string) => { success: boolean; error?: string };
+  verifyCredentials: (email: string, password?: string) => { success: boolean; error?: string; user?: AppUser };
+  completeLogin: (user: AppUser) => void;
+  login: (email: string, password?: string) => { success: boolean; error?: string; user?: AppUser };
   logout: () => void;
   setCurrentUser: (user: AppUser) => void;
   setUserRole: (role: UserRole) => void;
@@ -306,31 +308,24 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return Boolean(perms[permission]);
   };
 
-  const login = (email: string, password?: string): { success: boolean; error?: string } => {
+  const verifyCredentials = (email: string, password?: string): { success: boolean; error?: string; user?: AppUser } => {
     const cleanInput = (email || '').trim().toLowerCase();
     if (!cleanInput) {
-      return { success: false, error: 'Por favor ingrese su usuario o correo institucional.' };
+      return { success: false, error: 'Usuario no encontrado' };
     }
 
-    // 1. Check in dynamic systemUsers (by exact email, or username without domain, or aliases)
+    // 1. Search in database system users
     let user = systemUsers.find(u => {
       const uEmail = u.email.toLowerCase();
       const uUser = uEmail.split('@')[0];
       return (
         uEmail === cleanInput ||
         uUser === cleanInput ||
-        (cleanInput === 'admin' && (u.role === 'edicion_total' || u.role === 'admin_ti')) ||
-        (cleanInput === 'pacomputo' && (u.email.includes('pacomputo') || u.role === 'edicion_total')) ||
-        (cleanInput === 'sistemas' && u.role === 'edicion_total') ||
-        (cleanInput === 'ti' && (u.role === 'edicion_total' || u.role === 'admin_ti')) ||
-        (cleanInput === 'visor' && u.role === 'visor') ||
-        (cleanInput === 'auditor' && u.role === 'visor') ||
-        (cleanInput === 'soporte' && u.role === 'soporte_tecnico') ||
-        (cleanInput === 'almacen' && u.role === 'almacenista')
+        u.id.toLowerCase() === cleanInput
       );
     });
 
-    // 2. Check in employees list
+    // 2. Search in database employees directory
     if (!user) {
       const matchedEmp = employees.find(e => 
         e.email.toLowerCase() === cleanInput || 
@@ -355,63 +350,31 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     }
 
-    // 3. Fallback for any Petroil institutional email or username
+    // If user does not exist in the database, deny access with exact requested legend
     if (!user) {
-      if (cleanInput.includes('@') || cleanInput.length >= 3) {
-        const fullEmail = cleanInput.includes('@') ? cleanInput : `${cleanInput}@petroil.com.mx`;
-        const prefix = fullEmail.split('@')[0];
-        const prettyName = prefix
-          .split(/[\._\-]/)
-          .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(' ');
-
-        user = {
-          id: `user-${Date.now()}`,
-          name: prettyName || 'Usuario Corporativo Petroil',
-          email: fullEmail,
-          password: 'admin123',
-          role: 'edicion_total',
-          roleTitle: 'Administrador de Cómputo TI (Edición Total)',
-          branchName: 'Corporativo Torre Central (CDMX)',
-          canEdit: true,
-          status: 'activo',
-          permissions: getDefaultPermissionsForRole('edicion_total'),
-          avatarUrl: undefined
-        };
-      }
+      return { success: false, error: 'Usuario no encontrado' };
     }
 
-    if (!user) {
-      return { success: false, error: 'Usuario no registrado. Ingrese su correo @petroil.com.mx o seleccione un perfil rápido.' };
-    }
-
-    // Check account status
+    // Check account active status
     if (user.status === 'inactivo') {
       return { 
         success: false, 
-        error: `La cuenta de acceso "${user.email}" está suspendida o inactiva. Solicite su reactivación a un Administrador.` 
+        error: `La cuenta de acceso "${user.email}" se encuentra inactiva en la base de datos.` 
       };
     }
 
-    // Flexible password check for demo/operational convenience
-    const allowedPasswords = [
-      user.password,
-      'admin123',
-      'admin',
-      'petroil',
-      'adminti123',
-      'visor123',
-      'soporte123',
-      'almacen123',
-      '123456',
-      'password'
-    ].filter(Boolean);
+    // Verify password against database record
+    const cleanPassword = (password || '').trim();
+    const storedPassword = (user.password || 'admin123').trim();
 
-    // If password provided and it does not match
-    if (password && password.trim() && !allowedPasswords.includes(password.trim())) {
-      return { success: false, error: 'Contraseña no válida. Puede usar la contraseña institucional demo "admin123".' };
+    if (!cleanPassword || cleanPassword !== storedPassword) {
+      return { success: false, error: 'Contraseña incorrecta' };
     }
 
+    return { success: true, user };
+  };
+
+  const completeLogin = (user: AppUser) => {
     const updatedUser = {
       ...user,
       lastLogin: new Date().toISOString()
@@ -421,7 +384,15 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setIsAuthenticated(true);
     localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, 'true');
     localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(updatedUser));
-    return { success: true };
+  };
+
+  const login = (email: string, password?: string): { success: boolean; error?: string; user?: AppUser } => {
+    const verification = verifyCredentials(email, password);
+    if (!verification.success || !verification.user) {
+      return verification;
+    }
+    completeLogin(verification.user);
+    return verification;
   };
 
   const logout = () => {
@@ -1615,6 +1586,8 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isViewer,
         isCloudSyncing,
         lastCloudSyncTime,
+        verifyCredentials,
+        completeLogin,
         login,
         logout,
         setCurrentUser,

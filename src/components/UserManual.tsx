@@ -180,7 +180,7 @@ export const UserManual: React.FC<UserManualProps> = ({ onNavigate }) => {
             <li><strong>Valor Total de Activos:</strong> Sumatoria contable del costo de adquisición registrado en pesos mexicanos (MXN).</li>
             <li><strong>Distribución por Estado:</strong> Desglose porcentual entre activos <em>En Uso</em>, <em>Disponible en Almacén</em>, <em>En Mantenimiento</em> y <em>De Baja</em>.</li>
             <li><strong>Alertas de Póliza y Garantía:</strong> Conteo de equipos con garantía vencida o próxima a caducar en los siguientes 30 días.</li>
-            <li><strong>Accesos Rápidos:</strong> Botones de navegación directa a altas de equipo, asignación de responsiva o programación de mantenimiento.</li>
+            <li><strong>Acciones Directas:</strong> Botones de navegación a altas de equipo, asignación de responsiva o programación de mantenimiento.</li>
           </ul>
         </div>
       )

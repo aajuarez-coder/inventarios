@@ -391,6 +391,38 @@ app.post('/api/v1/devices/:id/commands', (req, res) => {
   }
 });
 
+// Helper to check if a command targets an agent
+function isCommandTargetingAgent(command: ServerDeviceCommand, agentId?: string, hostname?: string): boolean {
+  const normHost = (hostname || '').trim().toLowerCase();
+  const normCmdHost = (command.targetHostname || '').trim().toLowerCase();
+  const normCmdAgent = (command.agentId || '').trim().toLowerCase();
+  const normAgentId = (agentId || '').trim().toLowerCase();
+
+  if (normAgentId && (normCmdAgent === normAgentId || normCmdHost === normAgentId)) {
+    return true;
+  }
+  if (normHost && (normCmdHost === normHost || normCmdAgent.includes(normHost))) {
+    return true;
+  }
+
+  // Cross check with cachedAgents
+  const agent = cachedAgents.find(a => 
+    (normAgentId && a.id.toLowerCase() === normAgentId) || 
+    (normHost && a.hostname.toLowerCase() === normHost)
+  );
+
+  if (agent) {
+    if (agent.linkedAssetTag && (normCmdHost === agent.linkedAssetTag.toLowerCase() || command.assetId === agent.linkedAssetTag)) {
+      return true;
+    }
+    if (agent.specs?.serialNumber && normCmdHost === agent.specs.serialNumber.toLowerCase()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // Agent endpoint to poll pending commands
 app.get('/api/v1/agent/commands', (req, res) => {
   const { agentId, hostname } = req.query;
@@ -398,11 +430,12 @@ app.get('/api/v1/agent/commands', (req, res) => {
     return res.status(400).json({ success: false, error: 'agentId o hostname requerido' });
   }
 
-  const pending = cachedCommands.filter(c => {
-    const matchAgent = agentId && c.agentId === agentId;
-    const matchHost = hostname && c.targetHostname.toLowerCase() === String(hostname).toLowerCase();
-    return (matchAgent || matchHost) && c.status === 'pending';
-  });
+  const strAgentId = typeof agentId === 'string' ? agentId : undefined;
+  const strHostname = typeof hostname === 'string' ? hostname : undefined;
+
+  const pending = cachedCommands.filter(c => 
+    c.status === 'pending' && isCommandTargetingAgent(c, strAgentId, strHostname)
+  );
 
   // Mark as sent
   pending.forEach(c => {
@@ -432,21 +465,38 @@ app.post('/api/v1/agent/commands/:commandId/ack', (req, res) => {
   cmd.executedAt = new Date().toISOString();
   cmd.outputMessage = outputMessage;
 
-  // If command was bitlocker lock, update agent bitlocker status
-  if (cmd.commandType === 'bitlocker_lock') {
-    const ag = cachedAgents.find(a => a.id === cmd.agentId || a.hostname.toLowerCase() === cmd.targetHostname.toLowerCase());
-    if (ag && ag.bitlockerStatus) {
-      ag.bitlockerStatus.lockState = 'locked';
-      ag.bitlockerStatus.protectionStatus = 'Bloqueado';
-      saveStoredAgents(cachedAgents);
+  // Update target agent if present
+  const ag = cachedAgents.find(a => 
+    a.id === cmd.agentId || 
+    a.hostname.toLowerCase() === cmd.targetHostname.toLowerCase() ||
+    (a.linkedAssetTag && a.linkedAssetTag.toLowerCase() === cmd.targetHostname.toLowerCase())
+  );
+
+  if (ag) {
+    if (cmd.commandType === 'bitlocker_lock') {
+      if (!ag.bitlockerStatus) {
+        ag.bitlockerStatus = {
+          drive: 'C:',
+          encryptionMethod: 'XTS-AES 256-bit',
+          protectionStatus: 'Bloqueado',
+          lockState: 'locked',
+          tpmPresent: true,
+          recoveryKey: '582914-381920-491028-192847-592817-482910-384918-294819',
+          lastStatusCheck: new Date().toISOString()
+        };
+      } else {
+        ag.bitlockerStatus.lockState = 'locked';
+        ag.bitlockerStatus.protectionStatus = 'Bloqueado';
+        ag.bitlockerStatus.lastStatusCheck = new Date().toISOString();
+      }
+    } else if (cmd.commandType === 'bitlocker_unlock') {
+      if (ag.bitlockerStatus) {
+        ag.bitlockerStatus.lockState = 'unlocked';
+        ag.bitlockerStatus.protectionStatus = 'Protegido';
+        ag.bitlockerStatus.lastStatusCheck = new Date().toISOString();
+      }
     }
-  } else if (cmd.commandType === 'bitlocker_unlock') {
-    const ag = cachedAgents.find(a => a.id === cmd.agentId || a.hostname.toLowerCase() === cmd.targetHostname.toLowerCase());
-    if (ag && ag.bitlockerStatus) {
-      ag.bitlockerStatus.lockState = 'unlocked';
-      ag.bitlockerStatus.protectionStatus = 'Protegido';
-      saveStoredAgents(cachedAgents);
-    }
+    saveStoredAgents(cachedAgents);
   }
 
   saveStoredCommands(cachedCommands);

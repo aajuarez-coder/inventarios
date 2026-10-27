@@ -25,7 +25,8 @@ import {
   History,
   MapPin,
   Lock,
-  RotateCcw
+  RotateCcw,
+  Trash2
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime, getWarrantyStatus, getMaintenanceStatus, getStatusBadge, getConditionLabel } from '../utils/formatters';
 import { AssetBarcode } from './AssetBarcode';
@@ -47,10 +48,11 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
   onOpenMaintenance,
   onOpenMap
 }) => {
-  const { employees, branches, timeline, assignments, currentUser, retireAsset, returnAsset } = useInventory();
+  const { employees, branches, timeline, assignments, currentUser, retireAsset, returnAsset, deleteAsset, canEdit } = useInventory();
   const [activeTab, setActiveTab] = useState<'specs' | 'timeline' | 'tag'>('specs');
   const [retireReason, setRetireReason] = useState('');
   const [showRetireConfirm, setShowRetireConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [returnBranchId, setReturnBranchId] = useState(asset.branchId || branches[0]?.id || '');
@@ -358,13 +360,24 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
 
         {/* Footer Actions */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="flex items-center gap-2">
             {asset.status !== 'baja' && currentUser.role === 'admin_ti' && (
               <button
                 onClick={() => setShowRetireConfirm(true)}
-                className="text-xs text-rose-600 hover:text-rose-700 font-medium px-2 py-1 rounded hover:bg-rose-50"
+                className="text-xs text-rose-600 hover:text-rose-700 font-medium px-2 py-1 rounded hover:bg-rose-50 cursor-pointer"
               >
                 Dar de Baja Definitiva
+              </button>
+            )}
+
+            {(asset.status === 'baja' || asset.physicalCondition === 'obsoleto') && canEdit && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="Eliminar permanentemente este equipo del inventario"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar Equipo (Baja / Obsoleto)</span>
               </button>
             )}
           </div>
@@ -570,15 +583,70 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowRetireConfirm(false)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleRetire}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 cursor-pointer"
               >
                 Confirmar Baja
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-slate-200 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="p-2.5 rounded-xl bg-rose-100 text-rose-600">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900">Eliminar Equipo Definitivamente</h3>
+                <p className="text-[11px] text-slate-500 font-mono">{asset.assetTag} • {asset.brand} {asset.model}</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 space-y-2">
+              <p className="font-semibold text-rose-800">
+                ¿Confirma que desea eliminar permanentemente este activo?
+              </p>
+              <p className="text-[11px] text-rose-700">
+                El equipo está dictaminado como <strong>{asset.status === 'baja' ? 'Dado de Baja' : ''}{asset.status === 'baja' && asset.physicalCondition === 'obsoleto' ? ' y ' : ''}{asset.physicalCondition === 'obsoleto' ? 'Físicamente Obsoleto' : ''}</strong>. Al proceder, se removerá por completo de la base de datos Firestore y del catálogo de inventario activo.
+              </p>
+              <div className="pt-1 text-[11px] font-mono text-slate-600">
+                S/N: {asset.serialNumber}
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500">
+              * Se registrará el evento de baja definitiva en la bitácora de auditoría histórica con la firma del usuario {currentUser.name}.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteAsset(asset.id);
+                  setShowDeleteConfirm(false);
+                  onClose();
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Confirmar Eliminación</span>
               </button>
             </div>
           </div>

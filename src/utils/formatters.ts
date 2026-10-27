@@ -172,6 +172,7 @@ export const getConditionLabel = (condition: PhysicalCondition): { label: string
     case 'bueno': return { label: 'Bueno (Uso normal)', color: 'text-blue-600' };
     case 'regular': return { label: 'Regular (Detalles estéticos)', color: 'text-amber-600' };
     case 'dañado': return { label: 'Dañado / En falla', color: 'text-red-600' };
+    case 'obsoleto': return { label: 'Obsoleto / Descontinuado', color: 'text-rose-600' };
   }
 };
 
