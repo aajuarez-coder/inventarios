@@ -154,13 +154,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
   ];
 
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 shrink-0 flex flex-col justify-between hidden md:flex">
-      <div className="p-4 space-y-1">
-        <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+    <aside className="w-64 bg-[#111113] border-r border-[rgba(242,239,235,0.12)] shrink-0 flex flex-col justify-between hidden md:flex text-[#f2efeb]">
+      <div className="p-3 space-y-1 overflow-y-auto">
+        <p className="label px-3 py-2 text-[10px] text-[rgba(242,239,235,0.45)] uppercase tracking-[0.15em] font-mono">
           Módulos del Sistema
-        </div>
+        </p>
 
-        <nav className="space-y-1">
+        <nav className="space-y-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -168,28 +168,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
               <button
                 key={item.id}
                 onClick={() => onSelectTab(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs font-medium transition-all group ${
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xs text-left text-xs font-medium transition-all group cursor-pointer ${
                   isActive 
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' 
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-[#1a1a1c] text-[#f2efeb] shadow-[inset_0_0_0_1px_rgba(242,239,235,0.15)] font-semibold' 
+                    : 'text-[rgba(242,239,235,0.65)] hover:bg-[#1a1a1c] hover:text-[#f2efeb]'
                 }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <Icon className={`w-4 h-4 shrink-0 transition-colors ${
-                    isActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600'
+                    isActive ? 'text-[#ff4d4d]' : 'text-[rgba(242,239,235,0.45)] group-hover:text-[#f2efeb]'
                   }`} />
                   <span className="truncate">{item.label}</span>
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
                   {item.count !== undefined && !isActive && (
-                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-mono">
+                    <span className="mono text-[10px] px-1.5 py-0.2 rounded-xs bg-[#1a1a1c] text-[rgba(242,239,235,0.6)] border border-[rgba(242,239,235,0.1)]">
                       {item.count}
                     </span>
                   )}
                   {item.badge && (
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                      isActive ? 'bg-white/20 text-white' : item.badgeColor
+                    <span className={`mono text-[9px] font-semibold px-1.5 py-0.2 rounded-xs ${
+                      isActive 
+                        ? 'bg-[#ff4d4d]/20 text-[#ff4d4d] border border-[#ff4d4d]/30' 
+                        : 'bg-[#1a1a1c] text-[rgba(242,239,235,0.7)] border border-[rgba(242,239,235,0.12)]'
                     }`}>
                       {item.badge}
                     </span>
@@ -202,30 +204,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
       </div>
 
       {/* Bottom system card & User Profile */}
-      <div className="p-3 border-t border-slate-100 space-y-2">
-        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-              currentUser.role === 'edicion_total'
-                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                : currentUser.role === 'visor'
-                ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                : 'bg-indigo-100 text-indigo-700 border border-indigo-200'
-            }`}>
+      <div className="p-3 border-t border-[rgba(242,239,235,0.12)] space-y-2">
+        <div className="p-2.5 rounded-xs bg-[#1a1a1c] border border-[rgba(242,239,235,0.12)] text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xs bg-[#ff4d4d] text-white flex items-center justify-center font-extrabold text-sm shrink-0 font-syne">
               {currentUser.name.charAt(0)}
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-slate-800 truncate text-[11px] leading-tight">
+              <p className="font-semibold text-[#f2efeb] truncate text-[11px] leading-tight">
                 {currentUser.name}
               </p>
-              <span className={`inline-block text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
-                currentUser.role === 'edicion_total'
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : currentUser.role === 'visor'
-                  ? 'bg-amber-50 text-amber-700'
-                  : 'bg-indigo-50 text-indigo-700'
-              }`}>
-                {currentUser.role === 'edicion_total' ? 'Edición Total' : currentUser.role === 'visor' ? 'Visor' : 'Admin TI'}
+              <span className="label text-[9px] text-[#10b981] font-mono block">
+                {currentUser.role === 'edicion_total' ? 'MODO MAESTRO HABILITADO' : currentUser.role === 'visor' ? 'MODO VISOR AUDITOR' : 'ADMINISTRADOR TI'}
               </span>
             </div>
           </div>
@@ -233,20 +223,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
           <button
             onClick={logout}
             title="Cerrar sesión"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0 cursor-pointer"
+            className="p-1.5 rounded-xs text-[rgba(242,239,235,0.4)] hover:text-[#ff4d4d] hover:bg-rose-500/10 transition-colors shrink-0 cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
           </button>
-        </div>
-
-        <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-50/80 to-cyan-50/80 border border-indigo-100 text-xs">
-          <div className="flex items-center gap-1.5 text-indigo-900 font-semibold mb-0.5 text-[11px]">
-            <Sparkles className="w-3 h-3 text-indigo-600" />
-            <span>Grupo Petroil TI</span>
-          </div>
-          <p className="text-[10px] text-slate-500 leading-tight">
-            Control de activos, inventario de hardware y auditoría legal.
-          </p>
         </div>
       </div>
     </aside>

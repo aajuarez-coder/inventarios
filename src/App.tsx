@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { InventoryProvider, useInventory } from './context/InventoryContext';
+import { GmailProvider } from './context/GmailContext';
 import { Header } from './components/Header';
 import { Sidebar, TabId } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -120,7 +121,7 @@ const AppContent: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-900 flex flex-col antialiased">
+    <div className="min-h-screen bg-[#111113] text-[#f2efeb] flex flex-col antialiased selection:bg-[#ff4d4d] selection:text-white">
       
       {/* Top Header */}
       <Header
@@ -132,54 +133,54 @@ const AppContent: React.FC = () => {
 
       {/* Active Role Status Notification Banner */}
       {isViewer && (
-        <div className="bg-amber-500/15 border-b border-amber-300/90 px-4 py-2.5 text-xs flex flex-wrap items-center justify-between text-amber-950 font-medium no-print">
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-xs flex flex-wrap items-center justify-between text-amber-200 font-medium no-print">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] shrink-0 font-bold">
-              👁
-            </div>
-            <span>
-              <strong>Modo Visor (Solo Lectura) Activo:</strong> Conectado como <em>{currentUser.name}</em> ({currentUser.email}). Modo de auditoría habilitado: puedes consultar todo el inventario, ver fichas técnicas, cronogramas y generar reportes consolidados en PDF. La edición y registro de registros están restringidos.
+            <span className="badge badge-amber font-mono">
+              MODO VISOR AUDITOR
+            </span>
+            <span className="text-[rgba(242,239,235,0.7)]">
+              Conectado como <em>{currentUser.name}</em> ({currentUser.email}). Modo solo lectura: consulta de inventario, fichas técnicas y reportes. Edición restringida.
             </span>
           </div>
           <button
             onClick={logout}
-            className="ml-auto mt-1 sm:mt-0 px-3 py-1 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-950 text-xs font-bold transition-colors cursor-pointer"
+            className="ml-auto mt-1 sm:mt-0 px-2.5 py-1 rounded-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-mono uppercase tracking-wider transition-colors cursor-pointer border border-amber-500/30"
           >
-            Cambiar de Perfil / Salir
+            Cambiar Operador
           </button>
         </div>
       )}
 
       {currentUser.role === 'edicion_total' && (
-        <div className="bg-emerald-500/10 border-b border-emerald-300/80 px-4 py-1.5 text-xs flex items-center justify-between text-emerald-950 font-medium no-print hidden sm:flex">
+        <div className="bg-[#1a1a1c] border-b border-[rgba(242,239,235,0.08)] px-4 py-1.5 text-xs flex items-center justify-between text-[rgba(242,239,235,0.7)] font-medium no-print hidden sm:flex">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>
-              <strong>Perfil Edición Total Activo:</strong> Conectado como <em>{currentUser.name}</em>. Privilegios de administrador maestro (altas, modificaciones técnicas, bajas, firmas y asignaciones habilitadas).
+            <span className="w-1.5 h-1.5 rounded-full bg-[#10b981] animate-pulse" />
+            <span className="text-[11px]">
+              <strong className="text-[#f2efeb]">Perfil Edición Total Activo:</strong> Conectado como <em>{currentUser.name}</em>. Privilegios de administrador maestro habilitados.
             </span>
           </div>
-          <span className="text-[10px] text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full font-bold">
-            Modo Maestro Habilitado
+          <span className="badge text-[9px] bg-emerald-500/10 text-[#10b981] border border-emerald-500/30 font-mono">
+            MODO MAESTRO HABILITADO
           </span>
         </div>
       )}
 
       {/* Mobile navigation bar */}
-      <div className="md:hidden bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between no-print">
+      <div className="md:hidden bg-[#1a1a1c] border-b border-[rgba(242,239,235,0.12)] px-4 py-2 flex items-center justify-between no-print">
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-lg text-slate-700 hover:bg-slate-100 flex items-center gap-2 text-xs font-semibold"
+          className="p-2 rounded-xs text-[rgba(242,239,235,0.8)] hover:bg-[#222225] flex items-center gap-2 text-xs font-semibold"
         >
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          <span>Módulos del Sistema</span>
+          {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          <span className="font-mono text-[11px] uppercase">Módulos</span>
         </button>
-        <span className="text-xs font-bold text-indigo-600 capitalize">
+        <span className="label text-[#ff4d4d] uppercase font-bold">
           {currentTab}
         </span>
       </div>
 
       {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-b border-slate-200 p-3 grid grid-cols-2 gap-2 z-20 no-print animate-in fade-in">
+        <div className="md:hidden bg-[#1a1a1c] border-b border-[rgba(242,239,235,0.12)] p-3 grid grid-cols-2 gap-2 z-20 no-print animate-in fade-in">
           {mobileNavItems.map(item => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -190,12 +191,12 @@ const AppContent: React.FC = () => {
                   setCurrentTab(item.id);
                   setMobileMenuOpen(false);
                 }}
-                className={`p-2 rounded-lg text-xs font-medium flex items-center gap-2 ${
-                  isActive ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-100'
+                className={`p-2 rounded-xs text-xs font-medium flex items-center gap-2 font-mono transition-colors ${
+                  isActive ? 'bg-[#ff4d4d] text-white' : 'text-[rgba(242,239,235,0.7)] hover:bg-[#242428]'
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                <span>{item.label}</span>
+                <Icon className="w-3.5 h-3.5" />
+                <span className="truncate">{item.label}</span>
               </button>
             );
           })}
@@ -203,7 +204,7 @@ const AppContent: React.FC = () => {
       )}
 
       {/* Main Workspace */}
-      <div className="flex-1 flex max-w-7xl w-full mx-auto">
+      <div className="flex-1 flex w-full">
         
         {/* Left Desktop Sidebar */}
         <Sidebar
@@ -215,7 +216,7 @@ const AppContent: React.FC = () => {
         />
 
         {/* Content Pane */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-y-auto technical-grid">
           {currentTab === 'dashboard' && (
             <Dashboard 
               onNavigate={(tab) => setCurrentTab(tab)} 
@@ -315,11 +316,25 @@ const AppContent: React.FC = () => {
         />
       )}
 
+      {/* Technical Industrial Footer */}
+      <footer className="border-t border-[rgba(242,239,235,0.12)] py-2.5 px-6 flex flex-wrap items-center justify-between text-xs label bg-[#111113] text-[rgba(242,239,235,0.5)] no-print">
+        <span className="font-mono text-[10px] tracking-wider">
+          © 2026 GRUPO PETROIL TI DIVISION • CONTROL CENTRAL DE HARDWARE & INVENTARIOS
+        </span>
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-1.5 font-mono text-[10px] text-[#10b981]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#10b981] animate-pulse" />
+            BITLOCKER ORCHESTRATION ONLINE
+          </span>
+          <span className="font-mono text-[10px] text-[rgba(242,239,235,0.4)]">
+            STABLE BUILD 2.4.0
+          </span>
+        </div>
+      </footer>
+
     </div>
   );
 };
-
-import { GmailProvider } from './context/GmailContext';
 
 export default function App() {
   return (
