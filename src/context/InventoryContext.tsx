@@ -271,7 +271,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }));
   });
 
-  const [currentUser, setCurrentUser] = useState<AppUser>(() => {
+  const [currentUser, setCurrentUserState] = useState<AppUser>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
     if (saved) {
       try {
@@ -298,6 +298,16 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const saved = localStorage.getItem(STORAGE_KEYS.AUTH_SESSION);
     return saved === 'true';
   });
+
+  // Protected setCurrentUser: when logged in with a registered account, profile switching is forbidden
+  const setCurrentUser = (user: AppUser) => {
+    if (isAuthenticated && currentUser && currentUser.id !== user.id) {
+      console.warn('[Seguridad Petroil] Cambio de perfil restringido: no se permite cambiar de operador mientras haya una sesión activa. Debe cerrar sesión primero.');
+      return;
+    }
+    setCurrentUserState(user);
+    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+  };
 
   const canEdit = currentUser?.canEdit !== false && currentUser?.role !== 'visor' && currentUser?.permissions?.isReadOnly !== true;
   const isViewer = currentUser?.role === 'visor' || currentUser?.permissions?.isReadOnly === true;
@@ -437,7 +447,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       lastLogin: new Date().toISOString()
     };
 
-    setCurrentUser(updatedUser);
+    setCurrentUserState(updatedUser);
     setIsAuthenticated(true);
     localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, 'true');
     localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(updatedUser));
@@ -698,9 +708,13 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const setUserRole = (role: UserRole) => {
+    if (isAuthenticated) {
+      console.warn('[Seguridad Petroil] Cambio de rol no permitido en una sesión activa de usuario registrado.');
+      return;
+    }
     const found = SYSTEM_USERS.find(u => u.role === role);
     if (found) {
-      setCurrentUser(found);
+      setCurrentUserState(found);
     }
   };
 

@@ -19,7 +19,8 @@ import {
   LogOut,
   Eye,
   ShieldCheck,
-  Mail
+  Mail,
+  Lock
 } from 'lucide-react';
 import { getWarrantyStatus, getMaintenanceStatus } from '../utils/formatters';
 import { AppUser, UserRole } from '../types/inventory';
@@ -78,11 +79,6 @@ export const Header: React.FC<HeaderProps> = ({
   });
 
   const totalUrgentCount = warrantyAlerts.length + maintenanceAlerts.length;
-
-  const handleUserSelect = (user: AppUser) => {
-    setCurrentUser(user);
-    setShowRoleMenu(false);
-  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -370,84 +366,71 @@ export const Header: React.FC<HeaderProps> = ({
               <ChevronDown className="w-3.5 h-3.5 text-[rgba(248,250,252,0.4)]" />
             </button>
 
-            {/* Role Switcher Menu */}
+            {/* User Profile Card - Profile switching blocked for security */}
             {showRoleMenu && (
-              <div className="absolute right-0 mt-2 w-80 bg-[#131a26] rounded-[6px] shadow-2xl border border-[rgba(248,250,252,0.15)] py-2.5 z-50 animate-in fade-in zoom-in-95 text-[#f8fafc]">
-                <div className="px-4 py-2 border-b border-[rgba(248,250,252,0.1)] flex items-center justify-between">
+              <div className="absolute right-0 mt-2 w-84 bg-[#131a26] rounded-[6px] shadow-2xl border border-[rgba(248,250,252,0.15)] py-3 z-50 animate-in fade-in zoom-in-95 text-[#f8fafc]">
+                <div className="px-4 pb-2.5 border-b border-[rgba(248,250,252,0.1)] flex items-center justify-between">
                   <div>
-                    <p className="font-syne text-xs uppercase tracking-wider text-[#f8fafc]">Operadores del Sistema</p>
-                    <p className="label text-[9px] text-[rgba(248,250,252,0.5)]">Cambiar operador activo:</p>
+                    <p className="font-syne text-xs uppercase tracking-wider text-[#f8fafc] font-bold">Perfil del Operador</p>
+                    <p className="label text-[9px] text-[rgba(248,250,252,0.5)]">Sesión activa protegida</p>
                   </div>
-                  <button
-                    onClick={() => {
-                      setShowRoleMenu(false);
-                      onOpenSettings();
-                    }}
-                    className="label text-[#ff8200] hover:underline cursor-pointer"
-                  >
-                    Gestionar
-                  </button>
-                </div>
-                
-                <div className="py-1 px-1.5 space-y-1 max-h-60 overflow-y-auto">
-                  {(systemUsers || []).map(user => {
-                    const isSelected = currentUser.id === user.id;
-                    const isEdicion = user.role === 'edicion_total';
-                    const isVis = user.role === 'visor';
-
-                    return (
-                      <button
-                        key={user.id}
-                        onClick={() => handleUserSelect(user)}
-                        className={`w-full text-left px-3 py-2 rounded-[6px] flex items-center justify-between text-xs transition-colors cursor-pointer ${
-                          isSelected 
-                            ? 'bg-[#004a99]/30 font-semibold text-[#f8fafc] border border-[#004a99]' 
-                            : 'hover:bg-[#1c2738] text-[rgba(248,250,252,0.8)]'
-                        }`}
-                      >
-                        <div className="min-w-0 pr-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-[#f8fafc] truncate">{user.name}</span>
-                            {isEdicion && (
-                              <span className="badge text-[9px] bg-emerald-500/10 text-[#10b981] border border-emerald-500/30">
-                                Total
-                              </span>
-                            )}
-                            {isVis && (
-                              <span className="badge badge-amber text-[9px]">
-                                Visor
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-[rgba(248,250,252,0.5)] font-mono truncate">{user.email} • {user.roleTitle}</p>
-                        </div>
-                        {isSelected && (
-                          <CheckCircle2 className="w-4 h-4 text-[#ff8200] shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="p-1.5 border-t border-[rgba(248,250,252,0.1)]">
-                  <button
-                    onClick={() => {
-                      setShowRoleMenu(false);
-                      onOpenSettings();
-                    }}
-                    className="w-full px-3 py-1.5 rounded-[6px] bg-[#1c2738] hover:bg-[#253347] text-[#f8fafc] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer mb-1 border border-[rgba(248,250,252,0.1)]"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-[#ff8200]" />
-                    <span className="font-mono text-[11px] uppercase">Administrar Usuarios & Permisos</span>
-                  </button>
-                </div>
-
-                <div className="px-3.5 py-2 border-t border-[rgba(248,250,252,0.1)] text-[11px] text-[rgba(248,250,252,0.5)] flex items-center justify-between">
-                  <span>Sede: <strong className="text-[#f8fafc]">{currentUser.branchName?.split('(')[0] || 'Corporativo'}</strong></span>
-                  <span className={`badge text-[9px] ${canEdit ? 'bg-emerald-500/10 text-[#10b981] border border-emerald-500/30' : 'badge-amber'}`}>
-                    {canEdit ? 'Escritura Activa' : 'Solo Lectura'}
+                  <span className="inline-flex items-center gap-1 text-[9px] font-mono px-2 py-0.5 rounded-[4px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    En línea
                   </span>
                 </div>
+
+                {/* Operator info details */}
+                <div className="p-3.5 space-y-3 bg-[#0a0e14]/50 my-2 mx-2.5 rounded-[6px] border border-[rgba(248,250,252,0.06)]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-[6px] bg-[#004a99] text-white flex items-center justify-center font-bold text-sm shadow-md shrink-0">
+                      {currentUser.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-xs font-bold text-[#f8fafc] truncate font-syne">{currentUser.name}</h4>
+                      <p className="text-[11px] text-[rgba(248,250,252,0.6)] font-mono truncate">{currentUser.email}</p>
+                      <span className="inline-block mt-1 badge text-[9px] bg-[#004a99]/30 text-sky-300 border border-[#004a99]/50 font-mono">
+                        {currentUser.roleTitle || (currentUser.role === 'edicion_total' ? 'Administrador Maestro' : 'Operador TI')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-[rgba(248,250,252,0.08)] space-y-1.5 text-[11px] font-mono">
+                    <div className="flex items-center justify-between text-[rgba(248,250,252,0.7)]">
+                      <span className="text-[rgba(248,250,252,0.4)]">Sede Asignada:</span>
+                      <span className="font-semibold text-[#f8fafc] truncate max-w-[170px]">{currentUser.branchName || 'Corporativo Central'}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[rgba(248,250,252,0.7)]">
+                      <span className="text-[rgba(248,250,252,0.4)]">Nivel de Acceso:</span>
+                      <span className={`font-semibold ${canEdit ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {canEdit ? 'Escritura & Control Total' : 'Solo Lectura (Visor)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Security Notice: Profile switching is explicitly blocked */}
+                  <div className="p-2.5 rounded-[4px] bg-[#131a26] border border-amber-500/20 text-[10px] text-amber-200/90 flex items-start gap-2">
+                    <Lock className="w-3.5 h-3.5 text-[#ff8200] shrink-0 mt-0.5" />
+                    <span className="leading-tight font-mono">
+                      <strong className="text-amber-100">Cambio de perfil no permitido:</strong> Por seguridad de auditoría, para ingresar con otro operador debe cerrar la sesión e ingresar con sus credenciales.
+                    </span>
+                  </div>
+                </div>
+
+                {canEdit && (
+                  <div className="p-1.5 border-t border-[rgba(248,250,252,0.1)]">
+                    <button
+                      onClick={() => {
+                        setShowRoleMenu(false);
+                        onOpenSettings();
+                      }}
+                      className="w-full px-3 py-1.5 rounded-[6px] bg-[#1c2738] hover:bg-[#253347] text-[#f8fafc] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-[rgba(248,250,252,0.1)] font-mono text-[11px] uppercase"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#ff8200]" />
+                      <span>Directorio de Usuarios & Permisos</span>
+                    </button>
+                  </div>
+                )}
 
                 <div className="p-1.5 border-t border-[rgba(248,250,252,0.1)]">
                   <button
@@ -456,7 +439,7 @@ export const Header: React.FC<HeaderProps> = ({
                       disconnectGoogle().catch(() => {});
                       logout();
                     }}
-                    className="w-full px-3 py-2 rounded-[6px] bg-rose-500/10 hover:bg-rose-500/20 text-[#ff8200] text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer border border-rose-500/20 font-mono text-[11px] uppercase"
+                    className="w-full px-3 py-2 rounded-[6px] bg-rose-500/10 hover:bg-rose-500/20 text-[#ff8200] text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer border border-rose-500/20 font-mono text-[11px] uppercase shadow-xs"
                   >
                     <LogOut className="w-4 h-4" />
                     <span>Cerrar Sesión</span>

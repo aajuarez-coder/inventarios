@@ -144,9 +144,11 @@ const AppContent: React.FC = () => {
           </div>
           <button
             onClick={logout}
-            className="ml-auto mt-1 sm:mt-0 px-2.5 py-1 rounded-[4px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-mono uppercase tracking-wider transition-colors cursor-pointer border border-amber-500/30"
+            title="Para cambiar de operador debe cerrar la sesión actual"
+            className="ml-auto mt-1 sm:mt-0 px-2.5 py-1 rounded-[4px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-mono uppercase tracking-wider transition-colors cursor-pointer border border-amber-500/30 flex items-center gap-1.5"
           >
-            Cambiar Operador
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Cerrar Sesión</span>
           </button>
         </div>
       )}

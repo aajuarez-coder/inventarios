@@ -43,7 +43,6 @@ export const SystemUsersManager: React.FC = () => {
     updateSystemUser, 
     deleteSystemUser, 
     toggleUserStatus, 
-    setCurrentUser,
     canEdit,
     hasPermission
   } = useInventory();
@@ -201,15 +200,6 @@ export const SystemUsersManager: React.FC = () => {
 
   const handleDeleteUser = (user: AppUser) => {
     setUserToDelete(user);
-  };
-
-  const handleSwitchUserSession = (user: AppUser) => {
-    if (user.status === 'inactivo') {
-      showNotification('No es posible iniciar sesión con una cuenta inactiva o suspendida.', true);
-      return;
-    }
-    setCurrentUser(user);
-    showNotification(`Sesión cambiada al operador: ${user.name} (${user.roleTitle})`);
   };
 
   const handleSaveResetPassword = (e: React.FormEvent) => {
@@ -613,19 +603,20 @@ export const SystemUsersManager: React.FC = () => {
               {/* Action Buttons */}
               <div className="mt-4 pt-3 border-t border-slate-100 space-y-2 text-xs">
                 <div className="flex items-center justify-between gap-1">
-                  {/* Switch to this user */}
-                  {!isCurrentUser ? (
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchUserSession(user)}
-                      title="Iniciar sesión inmediatamente con esta cuenta"
-                      className="p-1.5 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-1 text-[11px] font-semibold cursor-pointer"
-                    >
-                      <LogIn className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Probar Sesión</span>
-                    </button>
+                  {/* Security session status badge - Direct profile switching blocked */}
+                  {isCurrentUser ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Sesión en uso
+                    </span>
                   ) : (
-                    <span className="text-[10px] text-slate-400 italic">Sesión actual en uso</span>
+                    <span 
+                      className="inline-flex items-center gap-1 text-[11px] text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200/80"
+                      title="Por seguridad de auditoría, para ingresar con esta cuenta debe cerrar la sesión actual e ingresar con sus credenciales o cuenta Google."
+                    >
+                      <Lock className="w-3 h-3 text-slate-400" />
+                      <span className="font-mono text-[10px]">Cambio bloqueado</span>
+                    </span>
                   )}
 
                   <div className="flex items-center gap-1 ml-auto">
