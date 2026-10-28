@@ -121,7 +121,7 @@ const AppContent: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#111113] text-[#f2efeb] flex flex-col antialiased selection:bg-[#ff4d4d] selection:text-white">
+    <div className="min-h-screen bg-[#0a0e14] text-[#f8fafc] flex flex-col antialiased selection:bg-[#ff8200] selection:text-white">
       
       {/* Top Header */}
       <Header
@@ -138,13 +138,13 @@ const AppContent: React.FC = () => {
             <span className="badge badge-amber font-mono">
               MODO VISOR AUDITOR
             </span>
-            <span className="text-[rgba(242,239,235,0.7)]">
+            <span className="text-[rgba(248,250,252,0.7)]">
               Conectado como <em>{currentUser.name}</em> ({currentUser.email}). Modo solo lectura: consulta de inventario, fichas técnicas y reportes. Edición restringida.
             </span>
           </div>
           <button
             onClick={logout}
-            className="ml-auto mt-1 sm:mt-0 px-2.5 py-1 rounded-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-mono uppercase tracking-wider transition-colors cursor-pointer border border-amber-500/30"
+            className="ml-auto mt-1 sm:mt-0 px-2.5 py-1 rounded-[4px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-mono uppercase tracking-wider transition-colors cursor-pointer border border-amber-500/30"
           >
             Cambiar Operador
           </button>
@@ -152,11 +152,11 @@ const AppContent: React.FC = () => {
       )}
 
       {currentUser.role === 'edicion_total' && (
-        <div className="bg-[#1a1a1c] border-b border-[rgba(242,239,235,0.08)] px-4 py-1.5 text-xs flex items-center justify-between text-[rgba(242,239,235,0.7)] font-medium no-print hidden sm:flex">
+        <div className="bg-[#131a26] border-b border-[rgba(248,250,252,0.08)] px-4 py-1.5 text-xs flex items-center justify-between text-[rgba(248,250,252,0.7)] font-medium no-print hidden sm:flex">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#10b981] animate-pulse" />
             <span className="text-[11px]">
-              <strong className="text-[#f2efeb]">Perfil Edición Total Activo:</strong> Conectado como <em>{currentUser.name}</em>. Privilegios de administrador maestro habilitados.
+              <strong className="text-[#f8fafc]">Perfil Edición Total Activo:</strong> Conectado como <em>{currentUser.name}</em>. Privilegios de administrador maestro habilitados.
             </span>
           </div>
           <span className="badge text-[9px] bg-emerald-500/10 text-[#10b981] border border-emerald-500/30 font-mono">
@@ -166,21 +166,21 @@ const AppContent: React.FC = () => {
       )}
 
       {/* Mobile navigation bar */}
-      <div className="md:hidden bg-[#1a1a1c] border-b border-[rgba(242,239,235,0.12)] px-4 py-2 flex items-center justify-between no-print">
+      <div className="md:hidden bg-[#131a26] border-b border-[rgba(248,250,252,0.12)] px-4 py-2 flex items-center justify-between no-print">
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-xs text-[rgba(242,239,235,0.8)] hover:bg-[#222225] flex items-center gap-2 text-xs font-semibold"
+          className="p-2 rounded-[6px] text-[rgba(248,250,252,0.8)] hover:bg-[#1c2738] flex items-center gap-2 text-xs font-semibold"
         >
           {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           <span className="font-mono text-[11px] uppercase">Módulos</span>
         </button>
-        <span className="label text-[#ff4d4d] uppercase font-bold">
+        <span className="label text-[#ff8200] uppercase font-bold">
           {currentTab}
         </span>
       </div>
 
       {mobileMenuOpen && (
-        <div className="md:hidden bg-[#1a1a1c] border-b border-[rgba(242,239,235,0.12)] p-3 grid grid-cols-2 gap-2 z-20 no-print animate-in fade-in">
+        <div className="md:hidden bg-[#131a26] border-b border-[rgba(248,250,252,0.12)] p-3 grid grid-cols-2 gap-2 z-20 no-print animate-in fade-in">
           {mobileNavItems.map(item => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -191,8 +191,8 @@ const AppContent: React.FC = () => {
                   setCurrentTab(item.id);
                   setMobileMenuOpen(false);
                 }}
-                className={`p-2 rounded-xs text-xs font-medium flex items-center gap-2 font-mono transition-colors ${
-                  isActive ? 'bg-[#ff4d4d] text-white' : 'text-[rgba(242,239,235,0.7)] hover:bg-[#242428]'
+                className={`p-2 rounded-[6px] text-xs font-medium flex items-center gap-2 font-mono transition-colors ${
+                  isActive ? 'bg-[#004a99] text-white font-semibold' : 'text-[rgba(248,250,252,0.7)] hover:bg-white/[0.04]'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />

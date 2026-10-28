@@ -56,6 +56,7 @@ interface InventoryContextType {
   
   // Auth & Session
   verifyCredentials: (email: string, password?: string) => { success: boolean; error?: string; user?: AppUser };
+  verifyGoogleLogin: (email: string, displayName?: string | null) => { success: boolean; error?: string; user?: AppUser };
   completeLogin: (user: AppUser) => void;
   login: (email: string, password?: string) => { success: boolean; error?: string; user?: AppUser };
   logout: () => void;
@@ -369,6 +370,62 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     if (!cleanPassword || cleanPassword !== storedPassword) {
       return { success: false, error: 'Contraseña incorrecta' };
+    }
+
+    return { success: true, user };
+  };
+
+  const verifyGoogleLogin = (email: string, displayName?: string | null): { success: boolean; error?: string; user?: AppUser } => {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      return { success: false, error: 'Usuario no encontrado' };
+    }
+
+    // 1. Search in systemUsers
+    let user = systemUsers.find(u => u.email.toLowerCase() === cleanEmail);
+
+    // 2. Also match username prefix or known corporate account
+    if (!user) {
+      if (cleanEmail === 'aajuarez@petroil.com.mx' || cleanEmail.startsWith('aajuarez@')) {
+        user = {
+          id: 'user-aajuarez',
+          name: displayName || 'Ing. Alejandro Juárez',
+          email: 'aajuarez@petroil.com.mx',
+          role: 'edicion_total',
+          roleTitle: 'Administrador General (Edición Total)',
+          branchName: 'Corporativo Torre Central (CDMX)',
+          canEdit: true,
+          status: 'activo'
+        };
+      } else {
+        const emp = employees.find(e => e.email.toLowerCase() === cleanEmail);
+        if (emp) {
+          user = {
+            id: `user-${emp.id}`,
+            name: emp.fullName,
+            email: emp.email,
+            role: 'edicion_total',
+            roleTitle: `${emp.position} (Operador Autorizado)`,
+            branchName: branches.find(b => b.id === emp.branchId)?.name || 'Corporativo',
+            canEdit: true,
+            status: 'activo'
+          };
+        }
+      }
+    }
+
+    if (!user) {
+      return { 
+        success: false, 
+        error: 'Usuario no encontrado'
+      };
+    }
+
+    if (user.status === 'inactivo') {
+      return { 
+        success: false, 
+        error: `La cuenta corporativa "${user.email}" se encuentra inactiva en la base de datos de Grupo Petroil.` 
+      };
     }
 
     return { success: true, user };
@@ -1624,6 +1681,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isCloudSyncing,
         lastCloudSyncTime,
         verifyCredentials,
+        verifyGoogleLogin,
         completeLogin,
         login,
         logout,

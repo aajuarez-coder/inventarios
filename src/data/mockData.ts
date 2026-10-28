@@ -872,6 +872,17 @@ export const SYSTEM_USERS: AppUser[] = [
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80'
   },
   {
+    id: 'user-aajuarez',
+    name: 'Ing. Alejandro Juárez',
+    email: 'aajuarez@petroil.com.mx',
+    password: 'admin123',
+    role: 'edicion_total',
+    roleTitle: 'Administrador General (Edición Total)',
+    branchName: 'Corporativo Torre Central (CDMX)',
+    canEdit: true,
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80'
+  },
+  {
     id: 'user-admin-total',
     name: 'Ing. Alejandro Juárez',
     email: 'admin@petroil.com.mx',

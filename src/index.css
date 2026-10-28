@@ -1,14 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #111113;
-  --ink: #f2efeb;
-  --accent: #ff4d4d;
-  --surface: #1a1a1c;
-  --surface-hover: #232326;
-  --border: rgba(242, 239, 235, 0.12);
-  --border-strong: rgba(242, 239, 235, 0.22);
-  --ink-faint: rgba(242, 239, 235, 0.5);
+  --bg: #0a0e14;
+  --ink: #f8fafc;
+  --accent: #ff8200; /* Petroil Orange */
+  --primary: #004a99; /* Petroil Blue */
+  --surface: #131a26;
+  --surface-hover: #1c2738;
+  --border: rgba(248, 250, 252, 0.1);
+  --border-strong: rgba(248, 250, 252, 0.2);
+  --ink-faint: rgba(248, 250, 252, 0.5);
 }
 
 @layer base {
@@ -34,7 +35,7 @@
 }
 
 .technical-grid {
-  background-image: radial-gradient(circle at 2px 2px, rgba(242, 239, 235, 0.12) 1px, transparent 0);
+  background-image: radial-gradient(circle at 2px 2px, rgba(248, 250, 252, 0.08) 1px, transparent 0);
   background-size: 24px 24px;
 }
 
@@ -51,28 +52,143 @@
   font-family: 'JetBrains Mono', monospace;
 }
 
+/* Stat Grid & Cards for Variation 11 */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 1024px) {
+  .stat-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.stat-card:hover {
+  border-color: var(--border-strong);
+}
+
+.stat-card .value {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.1;
+  margin: 8px 0;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 20px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-primary:hover {
+  background: #ff9426;
+  transform: translateY(-1px);
+}
+
+.btn-petroil {
+  background: var(--primary);
+  color: #ffffff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-petroil:hover {
+  background: #005bbd;
+}
+
 .badge-amber {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(245, 158, 11, 0.12);
   color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.25);
 }
 
 .badge-red {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.12);
   color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 .badge-emerald {
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(16, 185, 129, 0.12);
   color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
 .badge-indigo {
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(99, 102, 241, 0.12);
   color: #818cf8;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.badge-petroil {
+  background: rgba(0, 74, 153, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(0, 74, 153, 0.4);
+}
+
+.badge-accent {
+  background: rgba(255, 130, 0, 0.15);
+  color: #ff8200;
+  border: 1px solid rgba(255, 130, 0, 0.35);
 }
 
 @media print {

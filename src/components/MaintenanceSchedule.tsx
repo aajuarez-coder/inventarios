@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useInventory } from '../context/InventoryContext';
-import { HardwareAsset, MaintenanceRecord } from '../types/inventory';
+import { HardwareAsset, MaintenanceRecord, Employee, Branch } from '../types/inventory';
 import { 
   Wrench, 
-  Calendar, 
+  Calendar as CalendarIcon, 
   Clock, 
   CheckCircle2, 
   AlertTriangle, 
@@ -20,16 +20,26 @@ import {
   Send,
   Lock,
   Download,
-  Printer
+  Printer,
+  CalendarCheck,
+  CalendarClock,
+  History,
+  LayoutGrid,
+  ListOrdered,
+  Building2,
+  RotateCcw
 } from 'lucide-react';
 import { formatDate, getMaintenanceStatus } from '../utils/formatters';
 import { EmailSimulatorModal } from './EmailSimulatorModal';
+import { MaintenanceCalendar } from './MaintenanceCalendar';
 import { generateInstitutionalMaintenancePdf } from '../utils/generateInstitutionalPdf';
 import confetti from 'canvas-confetti';
 
 interface MaintenanceScheduleProps {
   preselectedAsset?: HardwareAsset | null;
 }
+
+type MaintenanceViewMode = 'calendar' | 'timeline' | 'cards' | 'history';
 
 export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ preselectedAsset }) => {
   const { 
@@ -45,8 +55,11 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
     isViewer
   } = useInventory();
 
+  // View mode tab state (Defaults to 'calendar' as requested)
+  const [viewMode, setViewMode] = useState<MaintenanceViewMode>('calendar');
+
   const [search, setSearch] = useState('');
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'all' | 'urgent' | 'scheduled' | 'done'>('all');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'all' | 'urgent' | 'scheduled'>('all');
   const [selectedAssetForEmail, setSelectedAssetForEmail] = useState<HardwareAsset | null>(null);
   const [showNewServiceModal, setShowNewServiceModal] = useState(Boolean(preselectedAsset));
   const [targetAssetForService, setTargetAssetForService] = useState<HardwareAsset | null>(preselectedAsset || null);
@@ -74,40 +87,116 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
     nextScheduledDate: '2027-04-16' // 6 months ahead
   });
 
-  // Calculate maintenance statuses
-  const assetsWithMaintenance = assets.map(asset => {
-    const maintStatus = getMaintenanceStatus(asset.nextMaintenanceDate);
-    const employee = employees.find(e => e.id === asset.assignedToEmployeeId);
-    const records = maintenanceRecords.filter(m => m.assetId === asset.id);
-    return {
-      asset,
-      maintStatus,
-      employee,
-      records
-    };
-  });
+  // Calculate maintenance statuses for catalog cards
+  const assetsWithMaintenance = useMemo(() => {
+    return assets.map(asset => {
+      const maintStatus = getMaintenanceStatus(asset.nextMaintenanceDate);
+      const employee = employees.find(e => e.id === asset.assignedToEmployeeId);
+      const records = maintenanceRecords.filter(m => m.assetId === asset.id);
+      return {
+        asset,
+        maintStatus,
+        employee,
+        records
+      };
+    });
+  }, [assets, employees, maintenanceRecords]);
 
-  const filteredItems = assetsWithMaintenance.filter(({ asset, maintStatus, employee }) => {
-    const q = search.toLowerCase();
-    const matchesSearch = 
-      asset.assetTag.toLowerCase().includes(q) ||
-      asset.name.toLowerCase().includes(q) ||
-      asset.serialNumber.toLowerCase().includes(q) ||
-      (employee && employee.fullName.toLowerCase().includes(q));
+  const filteredItems = useMemo(() => {
+    return assetsWithMaintenance.filter(({ asset, maintStatus, employee }) => {
+      const q = search.toLowerCase();
+      const matchesSearch = 
+        asset.assetTag.toLowerCase().includes(q) ||
+        asset.name.toLowerCase().includes(q) ||
+        asset.serialNumber.toLowerCase().includes(q) ||
+        (employee && employee.fullName.toLowerCase().includes(q));
 
-    let matchesFilter = true;
-    if (selectedStatusFilter === 'urgent') {
-      matchesFilter = maintStatus.status === 'vencido' || maintStatus.status === 'proximo';
-    } else if (selectedStatusFilter === 'scheduled') {
-      matchesFilter = maintStatus.status === 'al_dia';
-    }
+      let matchesFilter = true;
+      if (selectedStatusFilter === 'urgent') {
+        matchesFilter = maintStatus.status === 'vencido' || maintStatus.status === 'proximo';
+      } else if (selectedStatusFilter === 'scheduled') {
+        matchesFilter = maintStatus.status === 'al_dia';
+      }
 
-    return matchesSearch && matchesFilter;
-  });
+      return matchesSearch && matchesFilter;
+    });
+  }, [assetsWithMaintenance, search, selectedStatusFilter]);
 
   const urgentCount = assetsWithMaintenance.filter(
     item => item.maintStatus.status === 'vencido' || item.maintStatus.status === 'proximo'
   ).length;
+
+  // Chronological future timeline of scheduled maintenances
+  const futureTimeline = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const items: Array<{
+      asset: HardwareAsset;
+      employee?: Employee;
+      branch?: Branch;
+      dateStr: string;
+      daysRemaining: number;
+      isProjected: boolean;
+      cycle: number;
+      status: 'vencido' | 'hoy' | 'proximo' | 'programado' | 'futuro';
+    }> = [];
+
+    const activeAssets = assets.filter(a => a.status !== 'baja');
+
+    activeAssets.forEach(asset => {
+      const employee = employees.find(e => e.id === asset.assignedToEmployeeId);
+      const branch = branches.find(b => b.id === asset.branchId);
+      const interval = asset.maintenanceIntervalMonths || 6;
+
+      if (asset.nextMaintenanceDate) {
+        const nextDate = asset.nextMaintenanceDate;
+        const diffMs = new Date(nextDate).getTime() - new Date(today).getTime();
+        const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        let status: 'vencido' | 'hoy' | 'proximo' | 'programado' | 'futuro' = 'programado';
+        if (daysRemaining < 0) status = 'vencido';
+        else if (daysRemaining === 0) status = 'hoy';
+        else if (daysRemaining <= 14) status = 'proximo';
+
+        items.push({
+          asset,
+          employee,
+          branch,
+          dateStr: nextDate,
+          daysRemaining,
+          isProjected: false,
+          cycle: 0,
+          status
+        });
+
+        // Add 2 projected future cycles
+        const [startY, startM, startD] = nextDate.split('-').map(Number);
+        if (startY && startM && startD) {
+          for (let c = 1; c <= 2; c++) {
+            const projectedMonthIndex = (startM - 1) + (c * interval);
+            const projYear = startY + Math.floor(projectedMonthIndex / 12);
+            const projMonth = (projectedMonthIndex % 12) + 1;
+            const projDateStr = `${projYear}-${String(projMonth).padStart(2, '0')}-${String(startD).padStart(2, '0')}`;
+            const projDiffMs = new Date(projDateStr).getTime() - new Date(today).getTime();
+            const projDaysRemaining = Math.ceil(projDiffMs / (1000 * 60 * 60 * 24));
+
+            items.push({
+              asset,
+              employee,
+              branch,
+              dateStr: projDateStr,
+              daysRemaining: projDaysRemaining,
+              isProjected: true,
+              cycle: c,
+              status: 'futuro'
+            });
+          }
+        }
+      }
+    });
+
+    // Sort chronologically
+    return items.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+  }, [assets, employees, branches]);
 
   const handleCreateService = (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,76 +269,85 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
     }, 120);
   };
 
+  const handleOpenServiceModalForAsset = (asset: HardwareAsset, scheduledDate?: string) => {
+    setServiceForm({
+      ...serviceForm,
+      assetId: asset.id,
+      description: `Mantenimiento preventivo correspondiente al ciclo del ${scheduledDate || asset.nextMaintenanceDate}: Limpieza física de disipador, renovación de pasta térmica y pruebas de diagnóstico.`
+    });
+    setShowNewServiceModal(true);
+  };
+
   return (
     <div className="space-y-5">
       
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+      {/* Top Banner (Variation 11) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#131a26] p-5 rounded-[6px] border border-[rgba(248,250,252,0.1)] shadow-xl">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-              Cronograma de Mantenimiento Preventivo
+            <h2 className="font-syne text-xl font-extrabold uppercase text-[#f8fafc] tracking-tight">
+              Control & Calendario de Mantenimiento Preventivo
             </h2>
             {urgentCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                {urgentCount} por atender
+              <span className="px-2 py-0.5 rounded-[4px] text-[10px] font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                {urgentCount} POR ATENDER
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Programación periódica de limpiezas internas, pasta térmica, revisiones técnicas y alertas por correo al personal.
+          <p className="label text-[10px] text-[rgba(248,250,252,0.5)] mt-1 font-mono">
+            Monitoreo en tiempo real de fechas programadas, proyecciones futuras, órdenes de servicio y alertas por correo al personal.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Institutional PDF Export Group */}
-          <div className="inline-flex rounded-xl shadow-xs border border-rose-200 overflow-hidden">
+          <div className="inline-flex rounded-[6px] shadow-xs border border-[rgba(248,250,252,0.15)] overflow-hidden">
             <button
               onClick={() => handleExportMaintenancePdf(false)}
               disabled={isExportingPdf}
-              className="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white font-bold text-xs transition-colors flex items-center gap-2 border-r border-rose-500 cursor-pointer shadow-xs"
+              className="px-3 py-2 bg-[#004a99] hover:bg-[#005bbd] disabled:opacity-50 text-white font-mono font-bold text-xs transition-colors flex items-center gap-2 border-r border-[rgba(248,250,252,0.15)] cursor-pointer"
               title="Descargar historial oficial de mantenimientos en PDF con logotipo de Petroil"
             >
               {isExportingPdf ? (
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                <Download className="w-4 h-4 text-white" />
+                <Download className="w-3.5 h-3.5 text-white" />
               )}
-              <span>Exportar Historial PDF</span>
+              <span>Exportar PDF</span>
             </button>
             <button
               onClick={() => handleExportMaintenancePdf(true)}
               disabled={isExportingPdf}
-              className="px-2.5 py-2.5 bg-rose-700 hover:bg-rose-800 disabled:bg-rose-500 text-white transition-colors cursor-pointer"
-              title="Imprimir historial institucional oficial de mantenimiento con logo Petroil"
+              className="px-2.5 py-2 bg-[#003875] hover:bg-[#004a99] disabled:opacity-50 text-white transition-colors cursor-pointer"
+              title="Imprimir historial oficial de mantenimiento con logo Petroil"
             >
-              <Printer className="w-4 h-4 text-rose-100" />
+              <Printer className="w-3.5 h-3.5 text-blue-200" />
             </button>
           </div>
 
           <button
             onClick={() => {
               if (!canEdit) {
-                alert('Acceso Denegado (Perfil Visor): El envío masivo de notificaciones está reservado para perfiles con permisos de edición (Edición Total o Soporte Técnico).');
+                alert('Acceso Denegado (Perfil Visor): El envío masivo de notificaciones está reservado para perfiles con permisos de edición.');
                 return;
               }
               handleSendBatchReminders();
             }}
-            className={`px-3.5 py-2.5 rounded-xl font-bold text-xs transition-colors flex items-center gap-2 shadow-xs ${
+            className={`px-3 py-2 rounded-[6px] font-mono font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-2 shadow-xs ${
               canEdit 
-                ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 cursor-pointer' 
-                : 'bg-slate-100 text-slate-500 border border-slate-300'
+                ? 'bg-[#ff8200] hover:bg-[#ff9426] text-slate-950 cursor-pointer' 
+                : 'bg-[#0a0e14] text-[rgba(248,250,252,0.5)] border border-[rgba(248,250,252,0.1)]'
             }`}
             title="Enviar avisos por correo a todos los usuarios con mantenimiento próximo"
           >
-            {canEdit ? <Send className="w-4 h-4" /> : <Lock className="w-4 h-4 text-amber-600" />}
-            <span>Notificar a Todos ({urgentCount})</span>
+            {canEdit ? <Send className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-amber-500" />}
+            <span>Avisar ({urgentCount})</span>
           </button>
 
           <button
             onClick={() => {
               if (!canEdit) {
-                alert('Acceso Denegado (Perfil Visor): Su usuario tiene permisos de solo lectura. Para registrar servicios técnicos se requiere perfil Edición Total o Soporte Técnico.');
+                alert('Acceso Denegado (Perfil Visor): Su usuario tiene permisos de solo lectura.');
                 return;
               }
               setServiceForm({
@@ -258,34 +356,29 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
               });
               setShowNewServiceModal(true);
             }}
-            className={`px-4 py-2.5 rounded-xl font-semibold text-xs transition-colors shadow-sm flex items-center gap-2 ${
+            className={`px-3.5 py-2 rounded-[6px] font-mono font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-2 ${
               canEdit 
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 cursor-pointer' 
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300'
+                ? 'bg-[#10b981] hover:bg-[#059669] text-white shadow-xs cursor-pointer' 
+                : 'bg-[#0a0e14] text-[rgba(248,250,252,0.5)] border border-[rgba(248,250,252,0.1)]'
             }`}
             title={canEdit ? 'Registrar servicio técnico' : 'Deshabilitado en modo Visor'}
           >
-            {canEdit ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4 text-amber-600" />}
-            <span>Registrar Servicio</span>
-            {!canEdit && (
-              <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-medium">
-                Solo Lectura
-              </span>
-            )}
+            {canEdit ? <Plus className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-amber-500" />}
+            <span>+ Registrar Servicio</span>
           </button>
         </div>
       </div>
 
       {/* PDF Success notification */}
       {pdfMessage && (
-        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-950 text-xs flex items-center justify-between shadow-xs animate-in fade-in">
+        <div className="p-3.5 rounded-[6px] bg-[#004a99]/20 border border-[#004a99]/40 text-cyan-200 text-xs flex items-center justify-between shadow-xs animate-in fade-in font-mono">
           <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-pulse" />
-            <span className="font-semibold">{pdfMessage}</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#004a99] animate-pulse" />
+            <span>{pdfMessage}</span>
           </div>
           <button
             onClick={() => setPdfMessage(null)}
-            className="text-rose-800 hover:text-rose-950 font-bold ml-3 text-sm cursor-pointer"
+            className="text-white hover:text-[#ff8200] font-bold ml-3 text-sm cursor-pointer"
           >
             ✕
           </button>
@@ -293,154 +386,365 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
       )}
 
       {batchSentMessage && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2 animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          <span>¡Notificaciones por correo enviadas exitosamente a los colaboradores correspondientes!</span>
+        <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-[6px] text-xs text-emerald-200 flex items-center gap-2 animate-in fade-in font-mono">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <span>¡Notificaciones institucionales por correo enviadas exitosamente a los colaboradores correspondientes!</span>
         </div>
       )}
 
-      {/* Filter toolbar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-        <div className="relative w-full max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Buscar por placa, modelo o colaborador asignado..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-hidden"
-          />
+      {/* View Mode Switcher Strip */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-1.5 rounded-[6px] bg-[#131a26] border border-[rgba(248,250,252,0.1)]">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setViewMode('calendar')}
+            className={`px-3.5 py-2 rounded-[4px] font-mono text-xs font-semibold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              viewMode === 'calendar'
+                ? 'bg-[#004a99] text-white shadow-sm'
+                : 'text-[rgba(248,250,252,0.6)] hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <CalendarIcon className="w-3.5 h-3.5 text-[#ff8200]" />
+            <span>Calendario Mensual & Futuro</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode('timeline')}
+            className={`px-3.5 py-2 rounded-[4px] font-mono text-xs font-semibold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              viewMode === 'timeline'
+                ? 'bg-[#004a99] text-white shadow-sm'
+                : 'text-[rgba(248,250,252,0.6)] hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <ListOrdered className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Línea de Tiempo Cronológica</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode('cards')}
+            className={`px-3.5 py-2 rounded-[4px] font-mono text-xs font-semibold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              viewMode === 'cards'
+                ? 'bg-[#004a99] text-white shadow-sm'
+                : 'text-[rgba(248,250,252,0.6)] hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Catálogo de Equipos ({assets.length})</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode('history')}
+            className={`px-3.5 py-2 rounded-[4px] font-mono text-xs font-semibold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              viewMode === 'history'
+                ? 'bg-[#004a99] text-white shadow-sm'
+                : 'text-[rgba(248,250,252,0.6)] hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <History className="w-3.5 h-3.5 text-amber-400" />
+            <span>Historial Realizado ({maintenanceRecords.length})</span>
+          </button>
         </div>
 
-        <div className="flex items-center gap-1.5 self-start sm:self-auto">
-          <button
-            onClick={() => setSelectedStatusFilter('all')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-              selectedStatusFilter === 'all' ? 'bg-indigo-600 text-white font-semibold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Todos ({assets.length})
-          </button>
-          <button
-            onClick={() => setSelectedStatusFilter('urgent')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-              selectedStatusFilter === 'urgent' ? 'bg-rose-600 text-white font-semibold' : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
-            }`}
-          >
-            Urgentes / Próximos ({urgentCount})
-          </button>
-          <button
-            onClick={() => setSelectedStatusFilter('scheduled')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-              selectedStatusFilter === 'scheduled' ? 'bg-sky-600 text-white font-semibold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Al Día
-          </button>
-        </div>
+        <span className="label text-[9px] text-[rgba(248,250,252,0.4)] pr-2 font-mono hidden md:block">
+          {viewMode === 'calendar' ? 'Vista interactiva mensual con proyecciones' : viewMode === 'timeline' ? 'Listado cronológico de fechas próximas y futuras' : viewMode === 'cards' ? 'Fichas técnicas individuales' : 'Registro de servicios completados'}
+        </span>
       </div>
 
-      {/* Maintenance Grid / List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredItems.map(({ asset, maintStatus, employee, records }) => {
-          return (
-            <div 
-              key={asset.id}
-              className={`bg-white rounded-xl border p-4 shadow-xs flex flex-col justify-between transition-all ${
-                maintStatus.status === 'vencido' 
-                  ? 'border-red-300 ring-1 ring-red-200' 
-                  : maintStatus.status === 'proximo'
-                  ? 'border-amber-300 ring-1 ring-amber-200'
-                  : 'border-slate-200 hover:border-indigo-300'
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <div className="flex items-center gap-1.5 font-mono font-bold text-xs text-indigo-700">
-                    <Laptop className="w-3.5 h-3.5" />
-                    <span>{asset.assetTag}</span>
+      {/* Main Content Area based on View Mode */}
+      {viewMode === 'calendar' && (
+        <MaintenanceCalendar
+          onOpenServiceModal={handleOpenServiceModalForAsset}
+          onOpenEmailModal={(asset) => setSelectedAssetForEmail(asset)}
+        />
+      )}
+
+      {viewMode === 'timeline' && (
+        <div className="p-5 rounded-[6px] bg-[#131a26] border border-[rgba(248,250,252,0.1)] space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[rgba(248,250,252,0.1)] gap-2">
+            <div>
+              <p className="label text-[#ff8200] font-mono">Cronograma Secuencial</p>
+              <h3 className="font-syne text-base font-bold text-[#f8fafc] uppercase">
+                Próximos Mantenimientos Programados y Futuros
+              </h3>
+            </div>
+            <span className="label text-[10px] text-[rgba(248,250,252,0.6)] font-mono">
+              Mostrando {futureTimeline.length} eventos programados y proyectados
+            </span>
+          </div>
+
+          <div className="divide-y divide-[rgba(248,250,252,0.06)]">
+            {futureTimeline.map((item, idx) => {
+              const isPast = item.daysRemaining < 0;
+              const isToday = item.daysRemaining === 0;
+              const isNear = item.daysRemaining > 0 && item.daysRemaining <= 14;
+
+              return (
+                <div 
+                  key={`${item.asset.id}-${item.dateStr}-${idx}`}
+                  className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-white/[0.02] px-2 rounded-[4px] transition-colors"
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className={`p-2.5 rounded-[4px] shrink-0 font-mono text-center min-w-[70px] ${
+                      isPast 
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' 
+                        : isToday 
+                        ? 'bg-[#ff8200]/20 text-[#ff8200] border border-[#ff8200]/30 animate-pulse' 
+                        : isNear 
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
+                        : 'bg-[#004a99]/20 text-blue-300 border border-[#004a99]/30'
+                    }`}>
+                      <span className="block text-[10px] uppercase font-bold">
+                        {isPast ? 'VENCIDO' : isToday ? 'HOY' : isNear ? 'PRÓXIMO' : 'PROGRAMADO'}
+                      </span>
+                      <strong className="block text-xs mt-0.5">{item.dateStr}</strong>
+                      <span className="block text-[9px] opacity-75">
+                        {isPast ? `${Math.abs(item.daysRemaining)}d atraso` : isToday ? 'Inmediato' : `En ${item.daysRemaining}d`}
+                      </span>
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-bold text-[#f8fafc]">{item.asset.assetTag}</span>
+                        <span className="text-xs text-[rgba(248,250,252,0.8)] font-semibold">{item.asset.brand} {item.asset.model}</span>
+                        {item.isProjected && (
+                          <span className="label text-[9px] px-1.5 py-0.2 rounded-[4px] bg-[#004a99]/30 text-cyan-300 border border-[#004a99]/40 font-mono">
+                            Proyección Ciclo #{item.cycle}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-[rgba(248,250,252,0.5)] font-mono mt-1">
+                        Custodio: <strong className="text-[rgba(248,250,252,0.8)]">{item.employee?.fullName || 'Stock Almacén TI'}</strong> • Sede: {item.branch?.name || 'Mazatlán'} • Frecuencia: Cada {item.asset.maintenanceIntervalMonths || 6}m
+                      </p>
+                    </div>
                   </div>
 
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${maintStatus.badgeClass}`}>
-                    {maintStatus.label}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleOpenServiceModalForAsset(item.asset, item.dateStr)}
+                      disabled={!canEdit}
+                      className="px-3 py-1.5 rounded-[4px] bg-[#ff8200] hover:bg-[#ff9426] disabled:opacity-50 text-white font-mono text-xs font-bold uppercase transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Wrench className="w-3.5 h-3.5" />
+                      <span>Atender</span>
+                    </button>
+
+                    {item.employee && (
+                      <button
+                        onClick={() => setSelectedAssetForEmail(item.asset)}
+                        className="px-3 py-1.5 rounded-[4px] bg-[#004a99] hover:bg-[#005bbd] text-white font-mono text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        <span>Notificar</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-                <div className="mt-3">
-                  <h3 className="font-bold text-sm text-slate-900 leading-snug">
-                    {asset.brand} {asset.model}
-                  </h3>
-                  <p className="text-[11px] text-slate-500 font-mono">
-                    Serie: {asset.serialNumber}
-                  </p>
-                </div>
+      {viewMode === 'cards' && (
+        <div className="space-y-4">
+          {/* Filter toolbar */}
+          <div className="bg-[#131a26] p-4 rounded-[6px] border border-[rgba(248,250,252,0.1)] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="relative w-full max-w-md">
+              <Search className="w-4 h-4 text-[rgba(248,250,252,0.4)] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Buscar por placa, modelo o colaborador asignado..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-[#0a0e14] border border-[rgba(248,250,252,0.1)] rounded-[6px] pl-9 pr-3 py-2 text-xs text-[#f8fafc] placeholder:text-[rgba(248,250,252,0.35)] focus:border-[#ff8200] outline-hidden font-mono"
+              />
+            </div>
 
-                {/* Dates breakdown */}
-                <div className="mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Próximo Mantenimiento:</span>
-                    <strong className="text-slate-900 font-mono">{formatDate(asset.nextMaintenanceDate)}</strong>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">Último Servicio:</span>
-                    <span className="text-slate-600 font-mono">{formatDate(asset.lastMaintenanceDate) || 'Sin registro'}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">Frecuencia recomendada:</span>
-                    <span className="text-slate-600">Cada {asset.maintenanceIntervalMonths || 6} meses</span>
-                  </div>
-                </div>
+            <div className="flex items-center gap-1.5 self-start sm:self-auto">
+              <button
+                onClick={() => setSelectedStatusFilter('all')}
+                className={`px-3 py-1.5 rounded-[4px] font-mono text-xs transition-colors cursor-pointer ${
+                  selectedStatusFilter === 'all' ? 'bg-[#004a99] text-white font-semibold' : 'bg-[#0a0e14] text-[rgba(248,250,252,0.6)] hover:bg-white/[0.04]'
+                }`}
+              >
+                Todos ({assets.length})
+              </button>
+              <button
+                onClick={() => setSelectedStatusFilter('urgent')}
+                className={`px-3 py-1.5 rounded-[4px] font-mono text-xs transition-colors cursor-pointer ${
+                  selectedStatusFilter === 'urgent' ? 'bg-rose-600 text-white font-semibold' : 'bg-rose-500/10 text-rose-300 border border-rose-500/20'
+                }`}
+              >
+                Urgentes ({urgentCount})
+              </button>
+              <button
+                onClick={() => setSelectedStatusFilter('scheduled')}
+                className={`px-3 py-1.5 rounded-[4px] font-mono text-xs transition-colors cursor-pointer ${
+                  selectedStatusFilter === 'scheduled' ? 'bg-[#ff8200] text-slate-950 font-bold' : 'bg-[#0a0e14] text-[rgba(248,250,252,0.6)] hover:bg-white/[0.04]'
+                }`}
+              >
+                Al Día
+              </button>
+            </div>
+          </div>
 
-                {/* Assigned Colaborador info */}
-                <div className="mt-3 text-xs">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
-                    Colaborador Notificable:
-                  </span>
-                  {employee ? (
-                    <div className="flex items-center justify-between mt-1">
-                      <div className="truncate">
-                        <p className="font-semibold text-slate-900 truncate">{employee.fullName}</p>
-                        <p className="text-[11px] text-slate-500 truncate">{employee.email}</p>
+          {/* Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredItems.map(({ asset, maintStatus, employee, records }) => {
+              const isUrgent = maintStatus.status === 'vencido' || maintStatus.status === 'proximo';
+
+              return (
+                <div 
+                  key={asset.id}
+                  className={`bg-[#131a26] rounded-[6px] border p-4 shadow-xl flex flex-col justify-between transition-all ${
+                    isUrgent 
+                      ? 'border-rose-500/40 ring-1 ring-rose-500/20' 
+                      : 'border-[rgba(248,250,252,0.1)] hover:border-[rgba(248,250,252,0.25)]'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between pb-2 border-b border-[rgba(248,250,252,0.08)]">
+                      <div className="flex items-center gap-1.5 font-mono font-bold text-xs text-[#f8fafc]">
+                        <Laptop className="w-3.5 h-3.5 text-[#ff8200]" />
+                        <span>{asset.assetTag}</span>
+                      </div>
+
+                      <span className={`label text-[9px] px-2 py-0.5 rounded-[4px] font-mono ${
+                        isUrgent 
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' 
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}>
+                        {maintStatus.label}
+                      </span>
+                    </div>
+
+                    <div className="mt-3">
+                      <h3 className="font-bold text-sm text-[#f8fafc] leading-snug">
+                        {asset.brand} {asset.model}
+                      </h3>
+                      <p className="text-[11px] text-[rgba(248,250,252,0.4)] font-mono">
+                        Serie: {asset.serialNumber}
+                      </p>
+                    </div>
+
+                    {/* Dates breakdown */}
+                    <div className="mt-3 p-2.5 rounded-[4px] bg-[#0a0e14] border border-[rgba(248,250,252,0.08)] text-xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[rgba(248,250,252,0.5)] font-mono text-[11px]">Próximo Mantenimiento:</span>
+                        <strong className="text-white font-mono">{formatDate(asset.nextMaintenanceDate)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-[rgba(248,250,252,0.4)] font-mono">Último Servicio:</span>
+                        <span className="text-[rgba(248,250,252,0.8)] font-mono">{formatDate(asset.lastMaintenanceDate) || 'Sin registro'}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-[rgba(248,250,252,0.4)] font-mono">Frecuencia:</span>
+                        <span className="text-[#ff8200] font-mono">Cada {asset.maintenanceIntervalMonths || 6} meses</span>
                       </div>
                     </div>
-                  ) : (
-                    <p className="text-slate-500 text-xs mt-0.5">En Almacén TI (Sin colaborador)</p>
-                  )}
+
+                    {/* Assigned Colaborador info */}
+                    <div className="mt-3 text-xs">
+                      <span className="label text-[9px] text-[rgba(248,250,252,0.4)] block font-mono">
+                        Colaborador Custodio:
+                      </span>
+                      {employee ? (
+                        <div className="mt-1">
+                          <p className="font-semibold text-[#f8fafc] truncate text-xs">{employee.fullName}</p>
+                          <p className="text-[10px] text-[rgba(248,250,252,0.5)] font-mono truncate">{employee.email}</p>
+                        </div>
+                      ) : (
+                        <p className="text-[rgba(248,250,252,0.4)] text-xs mt-0.5 font-mono">En Almacén TI (Sin colaborador)</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Actions */}
+                  <div className="mt-4 pt-3 border-t border-[rgba(248,250,252,0.08)] flex items-center justify-between gap-2 text-xs">
+                    {employee && (
+                      <button
+                        onClick={() => setSelectedAssetForEmail(asset)}
+                        className="flex-1 py-1.5 px-2 rounded-[4px] bg-[#004a99] hover:bg-[#005bbd] text-white font-mono text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                        title="Previsualizar y enviar correo al usuario"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        <span>Aviso</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => handleOpenServiceModalForAsset(asset)}
+                      disabled={!canEdit}
+                      className="py-1.5 px-3 rounded-[4px] bg-[#ff8200] hover:bg-[#ff9426] disabled:opacity-50 text-white font-mono text-[10px] font-bold uppercase transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Wrench className="w-3.5 h-3.5" />
+                      <span>Servicio</span>
+                    </button>
+                  </div>
+
                 </div>
-              </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-              {/* Card Actions */}
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
-                {employee && (
-                  <button
-                    onClick={() => setSelectedAssetForEmail(asset)}
-                    className="flex-1 py-1.5 px-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold transition-colors flex items-center justify-center gap-1.5"
-                    title="Previsualizar y enviar correo al usuario"
-                  >
-                    <Mail className="w-3.5 h-3.5" />
-                    Enviar Correo
-                  </button>
-                )}
-
-                <button
-                  onClick={() => {
-                    setServiceForm({
-                      ...serviceForm,
-                      assetId: asset.id
-                    });
-                    setShowNewServiceModal(true);
-                  }}
-                  className="py-1.5 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors flex items-center gap-1"
-                >
-                  <Wrench className="w-3.5 h-3.5" />
-                  Realizar Servicio
-                </button>
-              </div>
-
+      {viewMode === 'history' && (
+        <div className="p-5 rounded-[6px] bg-[#131a26] border border-[rgba(248,250,252,0.1)] space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[rgba(248,250,252,0.1)]">
+            <div>
+              <p className="label text-[#ff8200] font-mono">Auditoría Técnica</p>
+              <h3 className="font-syne text-base font-bold text-[#f8fafc] uppercase">
+                Historial de Servicios Técnicos Completados
+              </h3>
             </div>
-          );
-        })}
-      </div>
+            <span className="label text-[10px] text-[rgba(248,250,252,0.5)] font-mono">
+              Total: {maintenanceRecords.length} registros
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-mono">
+              <thead>
+                <tr className="border-b border-[rgba(248,250,252,0.1)] text-[rgba(248,250,252,0.4)] text-[10px] uppercase">
+                  <th className="py-2.5 px-3">Fecha</th>
+                  <th className="py-2.5 px-3">Equipo</th>
+                  <th className="py-2.5 px-3">Tipo</th>
+                  <th className="py-2.5 px-3">Técnico</th>
+                  <th className="py-2.5 px-3">Descripción</th>
+                  <th className="py-2.5 px-3">Próximo</th>
+                  <th className="py-2.5 px-3 text-right">Diagnóstico</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[rgba(248,250,252,0.06)]">
+                {maintenanceRecords.map(rec => {
+                  const asset = assets.find(a => a.id === rec.assetId);
+                  return (
+                    <tr key={rec.id} className="hover:bg-white/[0.02] text-[rgba(248,250,252,0.85)]">
+                      <td className="py-3 px-3 text-white font-bold">{rec.date}</td>
+                      <td className="py-3 px-3">
+                        <strong className="text-[#ff8200]">{asset?.assetTag || rec.assetId}</strong>
+                        <span className="block text-[10px] text-[rgba(248,250,252,0.4)]">{asset?.brand} {asset?.model}</span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="label text-[9px] px-1.5 py-0.5 rounded-[3px] bg-[#004a99]/20 text-cyan-300 border border-[#004a99]/30">
+                          {rec.type.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">{rec.technicianName}</td>
+                      <td className="py-3 px-3 max-w-xs truncate text-[11px] text-[rgba(248,250,252,0.6)]">{rec.description}</td>
+                      <td className="py-3 px-3 text-white font-bold">{rec.nextScheduledDate}</td>
+                      <td className="py-3 px-3 text-right">
+                        <span className="text-emerald-400 font-bold">{rec.diagnosticScore || 100}%</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Email Simulator Modal */}
       {selectedAssetForEmail && (
@@ -451,33 +755,33 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
         />
       )}
 
-      {/* Register Technical Service Modal */}
+      {/* Register Technical Service Modal (Styled in Variation 11) */}
       {showNewServiceModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95">
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[#131a26] rounded-[6px] shadow-2xl max-w-2xl w-full border border-[rgba(248,250,252,0.15)] overflow-hidden max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-[#0a0e14] border-b border-[rgba(248,250,252,0.1)] text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Wrench className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-sm">Registro de Servicio de Mantenimiento Preventivo</h3>
+                <Wrench className="w-5 h-5 text-[#ff8200]" />
+                <h3 className="font-syne font-bold text-sm uppercase">Registro de Servicio de Mantenimiento Preventivo</h3>
               </div>
-              <button onClick={() => setShowNewServiceModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowNewServiceModal(false)} className="text-[rgba(248,250,252,0.5)] hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateService} className="p-6 overflow-y-auto space-y-4 text-xs">
+            <form onSubmit={handleCreateService} className="p-6 overflow-y-auto space-y-4 text-xs font-mono">
               
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Equipo Atendido *</label>
+                <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase">Equipo Atendido *</label>
                 <select
                   required
                   value={serviceForm.assetId}
                   onChange={(e) => setServiceForm({ ...serviceForm, assetId: e.target.value })}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white outline-hidden"
+                  className="w-full p-2.5 border border-[rgba(248,250,252,0.15)] rounded-[6px] bg-[#0a0e14] text-[#f8fafc] outline-hidden focus:border-[#ff8200]"
                 >
-                  <option value="">-- Seleccionar Equipo --</option>
+                  <option value="" className="bg-[#131a26]">-- Seleccionar Equipo --</option>
                   {assets.map(a => (
-                    <option key={a.id} value={a.id}>
+                    <option key={a.id} value={a.id} className="bg-[#131a26]">
                       [{a.assetTag}] {a.brand} {a.model} - S/N: {a.serialNumber}
                     </option>
                   ))}
@@ -486,35 +790,35 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Técnico Responsable *</label>
+                  <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase">Técnico Responsable *</label>
                   <input
                     type="text"
                     required
                     value={serviceForm.technicianName}
                     onChange={(e) => setServiceForm({ ...serviceForm, technicianName: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full p-2 border border-[rgba(248,250,252,0.15)] rounded-[6px] bg-[#0a0e14] text-[#f8fafc] outline-hidden focus:border-[#ff8200]"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Costo Estimado de Insumos (MXN)</label>
+                  <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase">Costo Estimado Insumos (MXN)</label>
                   <input
                     type="number"
                     value={serviceForm.cost}
                     onChange={(e) => setServiceForm({ ...serviceForm, cost: Number(e.target.value) })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full p-2 border border-[rgba(248,250,252,0.15)] rounded-[6px] bg-[#0a0e14] text-[#f8fafc] outline-hidden focus:border-[#ff8200]"
                   />
                 </div>
               </div>
 
               {/* Checklist */}
-              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                <span className="font-bold text-slate-700 block uppercase tracking-wider text-[11px]">
+              <div className="p-3.5 bg-[#0a0e14] rounded-[6px] border border-[rgba(248,250,252,0.1)] space-y-2">
+                <span className="font-bold text-[#ff8200] block uppercase tracking-wider text-[11px]">
                   Checklist Técnico Realizado (Protocolo de 7 Puntos):
                 </span>
                 <div className="space-y-1.5">
                   {serviceForm.tasks.map((task, idx) => (
-                    <label key={idx} className="flex items-center gap-2 text-slate-700 cursor-pointer">
-                      <input type="checkbox" defaultChecked className="rounded text-indigo-600" />
+                    <label key={idx} className="flex items-center gap-2 text-[rgba(248,250,252,0.8)] cursor-pointer text-xs">
+                      <input type="checkbox" defaultChecked className="rounded accent-[#ff8200] bg-[#131a26]" />
                       <span>{task}</span>
                     </label>
                   ))}
@@ -522,50 +826,50 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Diagnóstico / Resumen del Trabajo:</label>
+                <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase">Diagnóstico / Resumen del Trabajo:</label>
                 <textarea
                   rows={2}
                   value={serviceForm.description}
                   onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })}
-                  className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                  className="w-full p-2 border border-[rgba(248,250,252,0.15)] rounded-[6px] bg-[#0a0e14] text-[#f8fafc] outline-hidden focus:border-[#ff8200]"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Calificación Diagnóstica (1-100):</label>
+                  <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase">Calificación Diagnóstica (1-100):</label>
                   <input
                     type="number"
                     min="1"
                     max="100"
                     value={serviceForm.diagnosticScore}
                     onChange={(e) => setServiceForm({ ...serviceForm, diagnosticScore: Number(e.target.value) })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full p-2 border border-[rgba(248,250,252,0.15)] rounded-[6px] bg-[#0a0e14] text-[#f8fafc] outline-hidden focus:border-[#ff8200]"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Próxima Fecha de Mantenimiento:</label>
+                  <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase">Próxima Fecha de Mantenimiento:</label>
                   <input
                     type="date"
                     required
                     value={serviceForm.nextScheduledDate}
                     onChange={(e) => setServiceForm({ ...serviceForm, nextScheduledDate: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full p-2 border border-[rgba(248,250,252,0.15)] rounded-[6px] bg-[#0a0e14] text-[#f8fafc] outline-hidden focus:border-[#ff8200]"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[rgba(248,250,252,0.1)]">
                 <button
                   type="button"
                   onClick={() => setShowNewServiceModal(false)}
-                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium"
+                  className="px-4 py-2 rounded-[4px] text-[rgba(248,250,252,0.7)] hover:bg-white/[0.04] font-medium cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
+                  className="px-4 py-2 rounded-[4px] bg-[#004a99] hover:bg-[#005bbd] text-white font-bold uppercase tracking-wider cursor-pointer shadow-xs"
                 >
                   Finalizar y Guardar Mantenimiento
                 </button>
