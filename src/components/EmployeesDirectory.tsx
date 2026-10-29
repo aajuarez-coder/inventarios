@@ -282,16 +282,16 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
             placeholder="Buscar por nombre, correo, número de empleado, puesto..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-hidden"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:border-[#ff8200] focus:ring-2 focus:ring-[#ff8200]/20 outline-hidden caret-[#ff8200]"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-slate-400 shrink-0">Departamento:</span>
+          <span className="text-slate-500 font-medium text-xs sm:text-sm shrink-0">Departamento:</span>
           <select
             value={selectedDept}
             onChange={(e) => setSelectedDept(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 focus:ring-2 focus:ring-indigo-100 outline-hidden w-full sm:w-auto"
+            className="px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer w-full sm:w-auto"
           >
             <option value="all">Todos los Departamentos</option>
             {departments.map(d => (
@@ -533,86 +533,86 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleCreateEmployee} className="p-6 space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCreateEmployee} className="p-6 space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">No. de Empleado *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">No. de Empleado *</label>
                   <input
                     type="text"
                     required
                     value={form.employeeNumber}
                     onChange={(e) => setForm({ ...form, employeeNumber: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-mono outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl font-mono text-[13px] text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden uppercase caret-[#ff8200]"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Nombre Completo *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Nombre Completo *</label>
                   <input
                     type="text"
                     required
                     placeholder="Ej. Juan Pérez Garza"
                     value={form.fullName}
                     onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Correo Electrónico *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Correo Electrónico *</label>
                   <input
                     type="email"
                     required
                     placeholder="usuario@petroil.com.mx"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Teléfono Móvil</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Teléfono Móvil</label>
                   <input
                     type="text"
                     placeholder="+52 (55) 1234-5678"
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Departamento *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Departamento *</label>
                   <input
                     type="text"
                     required
                     placeholder="Ej. Finanzas, Operaciones, TI"
                     value={form.department}
                     onChange={(e) => setForm({ ...form, department: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Puesto / Cargo *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Puesto / Cargo *</label>
                   <input
                     type="text"
                     required
                     placeholder="Ej. Analista Contable Senior"
                     value={form.position}
                     onChange={(e) => setForm({ ...form, position: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Sucursal de Adscripción *</label>
+                <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Sucursal de Adscripción *</label>
                 <select
                   value={form.branchId}
                   onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-                  className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                 >
                   {branches.map(b => (
                     <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
@@ -654,24 +654,24 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleUpdateEmployeeSubmit} className="p-6 space-y-3.5 text-xs overflow-y-auto">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleUpdateEmployeeSubmit} className="p-6 space-y-4 text-sm overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Número de Empleado *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Número de Empleado *</label>
                   <input
                     type="text"
                     required
                     value={editEmployeeForm.employeeNumber}
                     onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, employeeNumber: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden font-mono uppercase"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl outline-hidden font-mono text-[13px] uppercase text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] caret-[#ff8200]"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Estatus Laboral *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Estatus Laboral *</label>
                   <select
                     value={editEmployeeForm.status}
                     onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, status: e.target.value as any })}
-                    className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                   >
                     <option value="activo">Activo (En funciones)</option>
                     <option value="licencia">En Licencia / Incapacidad</option>
@@ -681,68 +681,68 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Nombre Completo *</label>
+                <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Nombre Completo *</label>
                 <input
                   type="text"
                   required
                   value={editEmployeeForm.fullName}
                   onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, fullName: e.target.value })}
-                  className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Correo Institucional *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Correo Institucional *</label>
                   <input
                     type="email"
                     required
                     value={editEmployeeForm.email}
                     onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, email: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Teléfono Móvil / Extensión</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Teléfono Móvil / Extensión</label>
                   <input
                     type="text"
                     value={editEmployeeForm.phone}
                     onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, phone: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Departamento *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Departamento *</label>
                   <input
                     type="text"
                     required
                     value={editEmployeeForm.department}
                     onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, department: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Puesto / Cargo *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Puesto / Cargo *</label>
                   <input
                     type="text"
                     required
                     value={editEmployeeForm.position}
                     onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, position: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Sucursal de Adscripción *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Sucursal de Adscripción *</label>
                   <select
                     value={editEmployeeForm.branchId}
                     onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, branchId: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                   >
                     {branches.map(b => (
                       <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
@@ -750,25 +750,25 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Fecha de Ingreso *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Fecha de Ingreso *</label>
                   <input
                     type="date"
                     required
                     value={editEmployeeForm.hireDate}
                     onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, hireDate: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">URL de Fotografía de Perfil (Opcional)</label>
+                <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">URL de Fotografía de Perfil (Opcional)</label>
                 <input
                   type="url"
                   placeholder="https://..."
                   value={editEmployeeForm.avatarUrl || ''}
                   onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, avatarUrl: e.target.value })}
-                  className="w-full p-2 border border-slate-300 rounded-lg outline-hidden text-[11px]"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl outline-hidden text-sm font-mono text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] caret-[#ff8200]"
                 />
               </div>
 
@@ -953,7 +953,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
                   </div>
 
                   <div>
-                    <label className="font-bold text-slate-700 block mb-1">
+                    <label className="font-semibold text-slate-700 block mb-1 text-xs sm:text-[13px]">
                       Observaciones y Dictamen de Recepción
                     </label>
                     <textarea
@@ -961,7 +961,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
                       onChange={(e) => setReturnNotes(e.target.value)}
                       placeholder="Observaciones de entrega: cargador entregado, accesorios completos, estado de batería, formato de disco..."
                       rows={3}
-                      className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-amber-200 outline-hidden text-xs text-slate-800"
+                      className="w-full p-3.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden text-sm leading-relaxed text-slate-900 bg-white caret-[#ff8200]"
                     />
                   </div>
                 </div>

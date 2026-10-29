@@ -224,45 +224,45 @@ export const CustomGmailComposeModal: React.FC<CustomGmailComposeModalProps> = (
               onChange={(e) => setTo(e.target.value)}
               placeholder="correo@petroil.com.mx"
               required
-              className="w-full p-2.5 border border-slate-300 rounded-lg bg-white font-mono text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white font-mono text-sm text-slate-900 focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-none caret-[#ff8200] transition-shadow"
             />
           </div>
 
           {/* Cc field */}
-          <div className="space-y-1">
-            <label className="font-semibold text-slate-700">Con Copia (Cc - opcional):</label>
+          <div className="space-y-1.5">
+            <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block">Con Copia (Cc - opcional):</label>
             <input
               type="text"
               value={cc}
               onChange={(e) => setCc(e.target.value)}
               placeholder="soporte-ti@petroil.com.mx"
-              className="w-full p-2 border border-slate-300 rounded-lg bg-white font-mono text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white font-mono text-sm text-slate-900 focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-none caret-[#ff8200] transition-shadow"
             />
           </div>
 
           {/* Subject */}
-          <div className="space-y-1">
-            <label className="font-semibold text-slate-700">Asunto:</label>
+          <div className="space-y-1.5">
+            <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block">Asunto:</label>
             <input
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="Ej. [Soporte TI] Aviso de entrega de equipo de cómputo"
               required
-              className="w-full p-2.5 border border-slate-300 rounded-lg bg-white font-medium text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white font-medium text-sm text-slate-900 focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-none caret-[#ff8200] transition-shadow"
             />
           </div>
 
           {/* Body */}
-          <div className="space-y-1">
-            <label className="font-semibold text-slate-700">Cuerpo del Mensaje:</label>
+          <div className="space-y-1.5">
+            <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block">Cuerpo del Mensaje:</label>
             <textarea
               rows={8}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Escriba el contenido del mensaje institucional..."
               required
-              className="w-full p-3 border border-slate-300 rounded-lg bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed"
+              className="w-full p-4 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-none text-sm leading-relaxed font-normal caret-[#ff8200] transition-shadow"
             />
           </div>
 

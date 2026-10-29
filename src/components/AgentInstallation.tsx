@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useInventory } from '../context/InventoryContext';
-import { HardwareAsset, AssetCategory } from '../types/inventory';
+import { HardwareAsset, AssetCategory, BitLockerStatus } from '../types/inventory';
 import { 
   Terminal, 
   Download, 
@@ -39,7 +39,13 @@ import {
   FileCheck,
   Network,
   Radio,
-  TerminalSquare
+  TerminalSquare,
+  Database,
+  User,
+  Building2,
+  Boxes,
+  Key,
+  FileSignature
 } from 'lucide-react';
 import { formatDate } from '../utils/formatters';
 import { RemoteSecurityModal } from './RemoteSecurityModal';
@@ -56,6 +62,14 @@ export interface ConnectedAgent {
   macAddress: string;
   branchName: string;
   branchId?: string;
+  warehouseId?: string;
+  warehouseName?: string;
+  employeeId?: string;
+  employeeName?: string;
+  employeeEmail?: string;
+  loggedOnUser?: string;
+  firestoreDatabaseId?: string;
+  firestoreProjectId?: string;
   lastPing: string;
   lastPingTimestamp?: number;
   status: 'online' | 'syncing' | 'idle' | 'offline';
@@ -66,6 +80,7 @@ export interface ConnectedAgent {
     serialNumber: string;
   };
   linkedAssetTag?: string;
+  bitlockerStatus?: BitLockerStatus;
   rawPayload?: Record<string, unknown>;
 }
 
@@ -84,7 +99,16 @@ const INITIAL_MOCK_AGENTS: ConnectedAgent[] = [
     osVersion: 'Windows 10 Pro 64-bit (Build 19045.4894)',
     ipAddress: '192.168.10.74',
     macAddress: '00:1A:2B:3C:4D:5E',
-    branchName: 'Corporativo Torre Central',
+    branchName: 'Corporativo Torre Central (Almacén Principal)',
+    branchId: 'suc-torre',
+    warehouseId: 'suc-torre',
+    warehouseName: 'Corporativo Torre Central (Almacén Principal)',
+    employeeId: 'emp-001',
+    employeeName: 'Abraham Juarez',
+    employeeEmail: 'aajuarez@petroil.com.mx',
+    loggedOnUser: 'PETROIL\\ajuarez',
+    firestoreDatabaseId: 'ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e',
+    firestoreProjectId: 'gen-lang-client-0946159343',
     lastPing: 'Hace 45 segundos',
     status: 'online',
     specs: {
@@ -93,7 +117,17 @@ const INITIAL_MOCK_AGENTS: ConnectedAgent[] = [
       storage: '512 GB NVMe SSD',
       serialNumber: 'LNV-PF38X991'
     },
-    linkedAssetTag: 'EQ-LAP-001'
+    linkedAssetTag: 'EQ-LAP-001',
+    bitlockerStatus: {
+      drive: 'C:',
+      encryptionMethod: 'XTS-AES 256-bit',
+      protectionStatus: 'Protegido',
+      lockState: 'unlocked',
+      recoveryKeyId: '{3A8E4C12-9921-4B2E-9D1A-8F2B7E1C9A4D}',
+      recoveryKey: '582914-381920-491028-192847-592817-482910-384918-294819',
+      tpmPresent: true,
+      lastStatusCheck: new Date().toISOString()
+    }
   },
   {
     id: 'agent-m1',
@@ -102,7 +136,16 @@ const INITIAL_MOCK_AGENTS: ConnectedAgent[] = [
     osVersion: 'macOS 15.1 Sequoia (Build 24B83)',
     ipAddress: '192.168.20.108',
     macAddress: 'F4:D4:88:51:7E:22',
-    branchName: 'Planta de Operaciones Monterrey',
+    branchName: 'Planta de Operaciones Monterrey (Almacén Norte)',
+    branchId: 'suc-mty',
+    warehouseId: 'suc-mty',
+    warehouseName: 'Planta de Operaciones Monterrey (Almacén Norte)',
+    employeeId: 'emp-002',
+    employeeName: 'Lic. Mariana Garza',
+    employeeEmail: 'mgarza@petroil.com.mx',
+    loggedOnUser: 'mgarza',
+    firestoreDatabaseId: 'ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e',
+    firestoreProjectId: 'gen-lang-client-0946159343',
     lastPing: 'Hace 2 minutos',
     status: 'online',
     specs: {
@@ -121,6 +164,15 @@ const INITIAL_MOCK_AGENTS: ConnectedAgent[] = [
     ipAddress: '192.168.30.15',
     macAddress: '52:54:00:8A:FE:91',
     branchName: 'Centro Tecnológico Guadalajara',
+    branchId: 'suc-gdl',
+    warehouseId: 'suc-gdl',
+    warehouseName: 'Centro Tecnológico Guadalajara',
+    employeeId: 'emp-003',
+    employeeName: 'Ing. Carlos Mendoza',
+    employeeEmail: 'cmendoza@petroil.com.mx',
+    loggedOnUser: 'root/cmendoza',
+    firestoreDatabaseId: 'ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e',
+    firestoreProjectId: 'gen-lang-client-0946159343',
     lastPing: 'Hace 1 minuto',
     status: 'online',
     specs: {
@@ -136,7 +188,7 @@ export const AgentInstallation: React.FC<AgentInstallationProps> = ({
   onNavigateToInventory, 
   onOpenAssetDetail 
 }) => {
-  const { branches, addAsset, assets, logEvent, currentUser, canEdit } = useInventory();
+  const { branches, employees, addAsset, assets, logEvent, currentUser, canEdit, createAssignment } = useInventory();
   
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformId>('windows');
   const [selectedBranchId, setSelectedBranchId] = useState<string>(branches[0]?.id || '');
@@ -168,6 +220,75 @@ export const AgentInstallation: React.FC<AgentInstallationProps> = ({
     agentHostname: string;
     agentId: string;
   } | null>(null);
+
+  // Employee and inventory tag selection for deployment
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+  const [suggestedAssetTag, setSuggestedAssetTag] = useState<string>('');
+
+  // Reassignment modal for warehouse, employee, and inventory link
+  const [reassignAgentModal, setReassignAgentModal] = useState<ConnectedAgent | null>(null);
+  const [reassignBranchId, setReassignBranchId] = useState<string>('');
+  const [reassignEmployeeId, setReassignEmployeeId] = useState<string>('');
+  const [reassignAssetTag, setReassignAssetTag] = useState<string>('');
+  const [assignLoading, setAssignLoading] = useState<boolean>(false);
+
+  const handleOpenReassign = (agent: ConnectedAgent) => {
+    setReassignAgentModal(agent);
+    setReassignBranchId(agent.branchId || branches[0]?.id || '');
+    setReassignEmployeeId(agent.employeeId || '');
+    setReassignAssetTag(agent.linkedAssetTag || '');
+  };
+
+  const handleSaveReassignment = async () => {
+    if (!reassignAgentModal) return;
+    setAssignLoading(true);
+    const targetBranch = branches.find(b => b.id === reassignBranchId);
+    const targetEmployee = employees.find(e => e.id === reassignEmployeeId);
+
+    try {
+      await fetch('/api/v1/agents/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: reassignAgentModal.id,
+          branchId: reassignBranchId,
+          branchName: targetBranch?.name || reassignAgentModal.branchName,
+          warehouseId: reassignBranchId,
+          warehouseName: targetBranch?.name || reassignAgentModal.warehouseName,
+          employeeId: reassignEmployeeId || undefined,
+          employeeName: targetEmployee?.fullName || undefined,
+          employeeEmail: targetEmployee?.email || undefined,
+          linkedAssetTag: reassignAssetTag || undefined
+        })
+      });
+    } catch (err) {
+      console.warn('Error guardando asignación de agente:', err);
+    }
+
+    setConnectedAgents(prev => {
+      const updated = prev.map(a => {
+        if (a.id === reassignAgentModal.id) {
+          return {
+            ...a,
+            branchId: reassignBranchId,
+            branchName: targetBranch?.name || a.branchName,
+            warehouseId: reassignBranchId,
+            warehouseName: targetBranch?.name || a.warehouseName,
+            employeeId: reassignEmployeeId || undefined,
+            employeeName: targetEmployee?.fullName || undefined,
+            employeeEmail: targetEmployee?.email || undefined,
+            linkedAssetTag: reassignAssetTag || a.linkedAssetTag
+          };
+        }
+        return a;
+      });
+      localStorage.setItem(STORAGE_KEY_AGENTS, JSON.stringify(updated));
+      return updated;
+    });
+
+    setAssignLoading(false);
+    setReassignAgentModal(null);
+  };
 
   const handleOpenAgentSecurity = (agent: ConnectedAgent) => {
     const existingAsset = agent.linkedAssetTag ? assets.find(a => a.assetTag === agent.linkedAssetTag) : null;
@@ -291,6 +412,7 @@ export const AgentInstallation: React.FC<AgentInstallationProps> = ({
   } | null>(null);
 
   const selectedBranch = branches.find(b => b.id === selectedBranchId) || branches[0];
+  const selectedEmployee = employees.find(e => e.id === selectedEmployeeId);
 
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -314,8 +436,11 @@ export const AgentInstallation: React.FC<AgentInstallationProps> = ({
       content = `# ==============================================================================
 # Script de Instalacion Automatica Agente Petroil ITAsset
 # Compatible con Windows 11 (21H2, 22H2, 23H2, 24H2) y Windows 10 (Build 19041+)
+# Base de Datos: Google Cloud Firestore (ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e)
+# Proyecto GCP: gen-lang-client-0946159343 | Region: us-east1
 # Servidor / TrueNAS VM: ${serverUrl}
-# Sede Asignada: ${selectedBranch?.name} (${selectedBranch?.city})
+# Almacen / Sede: ${selectedBranch?.name} (${selectedBranch?.city})
+# Colaborador Asignado: ${selectedEmployee ? selectedEmployee.fullName : 'Sin asignar (Stock en Almacen)'}
 # Token de Enrolamiento: ${enrollmentToken}
 # ==============================================================================
 
@@ -372,20 +497,29 @@ New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
 Write-Host "[+] Directorios creados: $installDir" -ForegroundColor Gray
 
-# 4. ARCHIVO DE CONFIGURACION DE ENROLAMIENTO
+# 4. ARCHIVO DE CONFIGURACION DE ENROLAMIENTO Y GOOGLE CLOUD
 $config = @{
-    ServerUrl       = "${serverUrl}/api/v1/telemetry"
-    EnrollmentToken = "${enrollmentToken}"
-    BranchId        = "${selectedBranch?.id}"
-    BranchName      = "${selectedBranch?.name}"
-    IntervalMinutes = [int]${syncInterval}
-    AgentVersion    = "2.4.1-LTS"
-    Platform        = "windows"
-    InstalledAt     = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    ServerUrl             = "${serverUrl}/api/v1/telemetry"
+    EnrollmentToken       = "${enrollmentToken}"
+    BranchId              = "${selectedBranch?.id}"
+    BranchName            = "${selectedBranch?.name}"
+    WarehouseId           = "${selectedBranch?.id}"
+    WarehouseName         = "${selectedBranch?.name}"
+    EmployeeId            = "${selectedEmployee?.id || ''}"
+    EmployeeName          = "${selectedEmployee?.fullName || ''}"
+    EmployeeEmail         = "${selectedEmployee?.email || ''}"
+    SuggestedAssetTag     = "${suggestedAssetTag}"
+    FirestoreProjectId    = "gen-lang-client-0946159343"
+    FirestoreDatabaseId   = "ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e"
+    FirestoreRegion       = "us-east1"
+    IntervalMinutes       = [int]${syncInterval}
+    AgentVersion          = "2.5.0-Enterprise"
+    Platform              = "windows"
+    InstalledAt           = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 }
 $configPath = "$installDir\\agent-config.json"
 $config | ConvertTo-Json -Depth 4 | Set-Content -Path $configPath -Encoding UTF8
-Write-Host "[+] Configuracion de enrolamiento guardada en $configPath" -ForegroundColor Gray
+Write-Host "[+] Configuracion de enrolamiento y Google Cloud guardada en $configPath" -ForegroundColor Gray
 
 # 5. CREACION DEL SCRIPT RECOPILADOR DE TELEMETRIA (PetroilCollector.ps1)
 $collectorScript = @'
@@ -454,20 +588,34 @@ try {
     Add-Content -Path $logFile -Value "[$(Get-Date)] Aviso BitLocker: $_"
 }
 
+# Deteccion de usuario activo y credenciales de sesion corporativa
+$loggedUser = $env:USERNAME
+$userDomain = $env:USERDOMAIN
+$fullUser = if ($userDomain) { "$userDomain\$loggedUser" } else { $loggedUser }
+
 $payload = @{
-    hostname       = $env:COMPUTERNAME
-    serialNumber   = $serial
-    os             = "$($os.Caption) (Build $($os.BuildNumber))"
-    cpu            = "$($cpu.Name) ($($cpu.NumberOfCores) Cores, $($cpu.NumberOfLogicalProcessors) Threads)"
-    ram            = "$ramGB GB DDR"
-    storage        = $diskSummary
-    ipAddress      = $ipAddr
-    macAddress     = $macAddr
-    branchId       = $cfg.BranchId
-    branchName     = $cfg.BranchName
-    enrollmentToken= $cfg.EnrollmentToken
-    timestamp      = (Get-Date).ToString("o")
-    bitlocker      = $blStatus
+    hostname            = $env:COMPUTERNAME
+    serialNumber        = $serial
+    os                  = "$($os.Caption) (Build $($os.BuildNumber))"
+    cpu                 = "$($cpu.Name) ($($cpu.NumberOfCores) Cores, $($cpu.NumberOfLogicalProcessors) Threads)"
+    ram                 = "$ramGB GB DDR"
+    storage             = $diskSummary
+    ipAddress           = $ipAddr
+    macAddress          = $macAddr
+    branchId            = $cfg.BranchId
+    branchName          = $cfg.BranchName
+    warehouseId         = $cfg.WarehouseId
+    warehouseName       = $cfg.WarehouseName
+    employeeId          = $cfg.EmployeeId
+    employeeName        = $cfg.EmployeeName
+    employeeEmail       = $cfg.EmployeeEmail
+    loggedOnUser        = $fullUser
+    suggestedAssetTag   = $cfg.SuggestedAssetTag
+    firestoreProjectId  = $cfg.FirestoreProjectId
+    firestoreDatabaseId = $cfg.FirestoreDatabaseId
+    enrollmentToken     = $cfg.EnrollmentToken
+    timestamp           = (Get-Date).ToString("o")
+    bitlocker           = $blStatus
 }
 
 $jsonBody = $payload | ConvertTo-Json -Depth 4
@@ -1078,7 +1226,12 @@ try {
 
     const count = assets.length + 1;
     const tagPrefix = cat === 'laptop' ? 'EQ-LAP' : cat === 'servidor' ? 'EQ-SRV' : 'EQ-PC';
-    const assetTag = `${tagPrefix}-${count.toString().padStart(3, '0')}`;
+    const assetTag = agent.linkedAssetTag || suggestedAssetTag || `${tagPrefix}-${count.toString().padStart(3, '0')}`;
+
+    const assignedEmployeeId = agent.employeeId || (selectedEmployeeId ? selectedEmployeeId : undefined);
+    const assignedBranchId = agent.branchId || selectedBranchId || branches[0]?.id;
+    const assignedBranch = branches.find(b => b.id === assignedBranchId) || selectedBranch;
+    const assignedEmployee = employees.find(e => e.id === assignedEmployeeId);
 
     const newAsset = addAsset({
       assetTag,
@@ -1086,7 +1239,7 @@ try {
       name: `${agent.hostname} (${agent.platform === 'windows' ? 'Windows' : agent.platform === 'macos' ? 'macOS' : 'Linux'})`,
       category: cat,
       brand,
-      model: agent.specs.cpu || 'Estación de Trabajo',
+      model: agent.specs.cpu || 'Estación de Trabajo Corporativa',
       specs: {
         cpu: agent.specs.cpu,
         ram: agent.specs.ram,
@@ -1095,34 +1248,66 @@ try {
         macAddress: agent.macAddress,
         ipAddress: agent.ipAddress
       },
-      status: 'disponible',
+      status: assignedEmployeeId ? 'asignado' : 'disponible',
       physicalCondition: 'excelente',
-      branchId: agent.branchId || selectedBranch.id,
-      locationDetails: `Sede ${agent.branchName || selectedBranch.name}`,
+      branchId: assignedBranchId,
+      assignedToEmployeeId: assignedEmployeeId,
+      locationDetails: `Almacén/Sede ${assignedBranch?.name || agent.branchName}`,
       purchaseDate: new Date().toISOString().split('T')[0],
       purchaseCost: cat === 'laptop' ? 24500 : cat === 'servidor' ? 68000 : 18500,
       currency: 'MXN',
-      supplier: 'Autodescubrimiento Agente Petroil',
+      supplier: 'Autodescubrimiento Agente Petroil Cloud',
       invoiceNumber: `AGT-AUTO-${Date.now().toString().slice(-6)}`,
       warrantyEndDate: new Date(Date.now() + 365 * 24 * 3600 * 1000 * 2).toISOString().split('T')[0],
       nextMaintenanceDate: new Date(Date.now() + 180 * 24 * 3600 * 1000).toISOString().split('T')[0],
       maintenanceIntervalMonths: 6,
-      accessoriesIncluded: ['Cable de alimentación / Periféricos base'],
-      notes: `Equipo auditado e incorporado automáticamente al inventario desde el Agente Petroil Daemon. Hostname: ${agent.hostname}, Serial: ${agent.specs.serialNumber}, IP: ${agent.ipAddress}.`
+      accessoriesIncluded: ['Cable de alimentación / Periféricos base', 'Cargador original'],
+      bitlockerStatus: agent.bitlockerStatus,
+      notes: `Equipo auditado e incorporado automáticamente al inventario desde el Agente Petroil Cloud. Hostname: ${agent.hostname}, Serial: ${agent.specs.serialNumber}, IP: ${agent.ipAddress}, Usuario detectado SO: ${agent.loggedOnUser || 'N/D'}. Base de datos: Google Cloud Firestore (ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e).`
     });
 
-    // Notify backend link
+    if (assignedEmployeeId) {
+      createAssignment(
+        newAsset.id,
+        assignedEmployeeId,
+        ['Equipo de cómputo auditado', 'Cargador original', 'Credenciales corporativas'],
+        `Asignación automática generada en el enrolamiento del Agente Petroil. Hostname: ${agent.hostname}, SO: ${agent.osVersion}.`,
+        currentUser.name
+      );
+    }
+
+    // Notify backend link with warehouse and employee
     try {
-      await fetch('/api/v1/agents/link', {
+      await fetch('/api/v1/agents/assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentId: agent.id, assetTag })
+        body: JSON.stringify({
+          agentId: agent.id,
+          linkedAssetTag: assetTag,
+          branchId: assignedBranchId,
+          branchName: assignedBranch?.name,
+          warehouseId: assignedBranchId,
+          warehouseName: assignedBranch?.name,
+          employeeId: assignedEmployeeId,
+          employeeName: assignedEmployee?.fullName,
+          employeeEmail: assignedEmployee?.email
+        })
       });
     } catch {}
 
     // Update state & localStorage
     setConnectedAgents(prev => {
-      const updated = prev.map(a => a.id === agent.id ? { ...a, linkedAssetTag: assetTag } : a);
+      const updated = prev.map(a => a.id === agent.id ? { 
+        ...a, 
+        linkedAssetTag: assetTag,
+        branchId: assignedBranchId,
+        branchName: assignedBranch?.name || a.branchName,
+        warehouseId: assignedBranchId,
+        warehouseName: assignedBranch?.name || a.warehouseName,
+        employeeId: assignedEmployeeId,
+        employeeName: assignedEmployee?.fullName || a.employeeName,
+        employeeEmail: assignedEmployee?.email || a.employeeEmail
+      } : a);
       localStorage.setItem(STORAGE_KEY_AGENTS, JSON.stringify(updated));
       return updated;
     });
@@ -1130,8 +1315,8 @@ try {
     logEvent({
       assetId: newAsset.id,
       type: 'alta',
-      title: 'Equipo Enrolado por Agente',
-      description: `Se enroló oficialmente ${assetTag} (${agent.hostname}) con serial ${agent.specs.serialNumber} en ${agent.branchName || selectedBranch.name}.`,
+      title: 'Equipo Enrolado por Agente en Google Cloud Firestore',
+      description: `Se enroló oficialmente ${assetTag} (${agent.hostname}) con serial ${agent.specs.serialNumber} en ${assignedBranch?.name}. ${assignedEmployee ? `Asignado a: ${assignedEmployee.fullName} (${assignedEmployee.position})` : 'Registrado en stock de almacén'}.`,
       author: currentUser.name
     });
 
@@ -1404,22 +1589,100 @@ try {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+        {/* Google Cloud Firestore Production Banner */}
+        <div className="p-3.5 rounded-xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 border border-blue-500/30 text-white flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-600/30 border border-blue-400/40 flex items-center justify-center text-blue-300 shrink-0">
+              <Database className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-white text-xs">Base de Datos: Google Cloud Firestore (Default & Realtime)</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Producción en Tiempo Real
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 font-mono mt-0.5">
+                ID: <strong className="text-amber-400">ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e</strong> | Proyecto GCP: <span className="text-blue-300">gen-lang-client-0946159343</span> (us-east1)
+              </p>
+            </div>
+          </div>
+          <div className="text-[11px] text-slate-300 flex items-center gap-2 shrink-0">
+            <span className="px-2 py-1 rounded-md bg-white/10 text-white font-mono">Reglas Desplegadas OK</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+          {/* Warehouse / Branch */}
           <div>
-            <label className="font-semibold text-slate-700 block mb-1">Sede de Inscripción Predeterminada</label>
+            <label className="font-semibold text-slate-700 block mb-1 flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Almacén / Sede de Asignación</span>
+            </label>
             <select
               value={selectedBranchId}
               onChange={(e) => setSelectedBranchId(e.target.value)}
               className="w-full p-2.5 rounded-xl border border-slate-300 bg-white font-medium focus:ring-2 focus:ring-indigo-500 outline-hidden"
             >
               {branches.map(b => (
-                <option key={b.id} value={b.id}>{b.city} - {b.name}</option>
+                <option key={b.id} value={b.id}>
+                  {b.name} ({b.city}){b.isMainWarehouse ? ' ★ Almacén Principal' : ''}
+                </option>
               ))}
             </select>
+            <span className="text-[10px] text-slate-500 mt-1 block">
+              Los equipos instalados se etiquetarán con la ubicación de este almacén.
+            </span>
           </div>
 
+          {/* Assigned Employee */}
           <div>
-            <label className="font-semibold text-slate-700 block mb-1">Clave de Enrolamiento (Token)</label>
+            <label className="font-semibold text-slate-700 block mb-1 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Colaborador / Custodio Asignado</span>
+            </label>
+            <select
+              value={selectedEmployeeId}
+              onChange={(e) => setSelectedEmployeeId(e.target.value)}
+              className="w-full p-2.5 rounded-xl border border-slate-300 bg-white font-medium focus:ring-2 focus:ring-indigo-500 outline-hidden"
+            >
+              <option value="">-- Sin asignar (Stock disponible en Almacén) --</option>
+              {employees.map(emp => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.fullName} - {emp.position} ({emp.department})
+                </option>
+              ))}
+            </select>
+            <span className="text-[10px] text-slate-500 mt-1 block">
+              Genera carta responsiva automática vinculando el equipo al colaborador.
+            </span>
+          </div>
+
+          {/* Suggested Asset Tag */}
+          <div>
+            <label className="font-semibold text-slate-700 block mb-1 flex items-center gap-1.5">
+              <Boxes className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Placa de Inventario Sugerida (Opcional)</span>
+            </label>
+            <input
+              type="text"
+              value={suggestedAssetTag}
+              onChange={(e) => setSuggestedAssetTag(e.target.value)}
+              placeholder="Ej: EQ-LAP-042 o dejar vacío para autogenerar"
+              className="w-full p-2.5 rounded-xl border border-slate-300 font-mono text-xs text-slate-800 bg-white focus:ring-2 focus:ring-indigo-500 outline-hidden"
+            />
+            <span className="text-[10px] text-slate-500 mt-1 block">
+              Si se especifica, el equipo adoptará esta placa al ser incorporado.
+            </span>
+          </div>
+
+          {/* Enrollment Token */}
+          <div>
+            <label className="font-semibold text-slate-700 block mb-1 flex items-center gap-1.5">
+              <Key className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Clave de Enrolamiento (Token)</span>
+            </label>
             <input
               type="text"
               value={enrollmentToken}
@@ -1428,8 +1691,12 @@ try {
             />
           </div>
 
+          {/* Sync Frequency */}
           <div>
-            <label className="font-semibold text-slate-700 block mb-1">Frecuencia de Reporte de Telemetría</label>
+            <label className="font-semibold text-slate-700 block mb-1 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Frecuencia de Telemetría</span>
+            </label>
             <select
               value={syncInterval}
               onChange={(e) => setSyncInterval(e.target.value)}
@@ -1442,9 +1709,13 @@ try {
             </select>
           </div>
 
+          {/* Server URL */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="font-semibold text-slate-700 block">URL Servidor / TrueNAS VM</label>
+              <label className="font-semibold text-slate-700 block flex items-center gap-1.5">
+                <Network className="w-3.5 h-3.5 text-indigo-600" />
+                <span>URL Servidor / Hub Central</span>
+              </label>
               <span className="text-[10px] text-indigo-600 font-medium">IP o Host</span>
             </div>
             <input
@@ -2244,10 +2515,10 @@ try {
             <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider font-semibold border-b border-slate-200">
               <tr>
                 <th className="py-2.5 px-3">Equipo / Hostname</th>
-                <th className="py-2.5 px-3">Sistema Operativo & Specs</th>
-                <th className="py-2.5 px-3">Sede Asignada</th>
-                <th className="py-2.5 px-3">Red (IP / MAC)</th>
-                <th className="py-2.5 px-3">Último Heartbeat</th>
+                <th className="py-2.5 px-3">Sistema & Hardware</th>
+                <th className="py-2.5 px-3">Almacén / Sede</th>
+                <th className="py-2.5 px-3">Colaborador / Custodio</th>
+                <th className="py-2.5 px-3">Base de Datos & Red</th>
                 <th className="py-2.5 px-3">Estado</th>
                 <th className="py-2.5 px-3 text-right">Acción / Inventario</th>
               </tr>
@@ -2261,7 +2532,18 @@ try {
                         {ag.platform === 'windows' ? '🪟' : ag.platform === 'macos' ? '🍎' : '🐧'}
                       </span>
                       <div>
-                        <strong className="text-slate-900 font-mono text-xs">{ag.hostname}</strong>
+                        <div className="flex items-center gap-1.5">
+                          <strong className="text-slate-900 font-mono text-xs">{ag.hostname}</strong>
+                          {ag.bitlockerStatus && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                              ag.bitlockerStatus.protectionStatus === 'Protegido'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`} title={`BitLocker: ${ag.bitlockerStatus.protectionStatus}`}>
+                              {ag.bitlockerStatus.protectionStatus === 'Protegido' ? '🔒 BitLocker' : '🔓 BitLocker Off'}
+                            </span>
+                          )}
+                        </div>
                         <span className="block text-[10px] text-slate-400 font-mono">
                           SN: {ag.specs.serialNumber || 'N/D'}
                         </span>
@@ -2269,39 +2551,101 @@ try {
                     </div>
                   </td>
                   <td className="py-3 px-3">
-                    <span className="font-medium text-slate-800 block truncate max-w-[200px]">{ag.osVersion}</span>
-                    <span className="text-[10px] text-slate-500 font-mono block truncate max-w-[220px]">
+                    <span className="font-medium text-slate-800 block truncate max-w-[190px]">{ag.osVersion}</span>
+                    <span className="text-[10px] text-slate-500 font-mono block truncate max-w-[200px]">
                       {ag.specs.cpu} | {ag.specs.ram}
                     </span>
                   </td>
-                  <td className="py-3 px-3 text-slate-700">
-                    {ag.branchName}
-                  </td>
-                  <td className="py-3 px-3 font-mono text-[11px] text-slate-600">
-                    <div>{ag.ipAddress}</div>
-                    <div className="text-[10px] text-slate-400">{ag.macAddress}</div>
-                  </td>
-                  <td className="py-3 px-3 text-slate-600">
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      <span>{ag.lastPing}</span>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <div>
+                        <span className="font-semibold text-slate-800 block text-xs">
+                          {ag.branchName || ag.warehouseName || 'Sede Principal'}
+                        </span>
+                        <button
+                          onClick={() => handleOpenReassign(ag)}
+                          className="text-[10px] text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                        >
+                          Cambiar Almacén &rarr;
+                        </button>
+                      </div>
                     </div>
                   </td>
                   <td className="py-3 px-3">
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      En Línea
-                    </span>
+                    <div className="space-y-0.5">
+                      {ag.employeeName ? (
+                        <div>
+                          <span className="font-semibold text-slate-900 block text-xs flex items-center gap-1">
+                            <User className="w-3 h-3 text-indigo-500" />
+                            {ag.employeeName}
+                          </span>
+                          {ag.employeeEmail && (
+                            <span className="text-[10px] text-slate-400 font-mono block truncate max-w-[150px]">
+                              {ag.employeeEmail}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium text-[10px]">
+                            En Almacén
+                          </span>
+                        </div>
+                      )}
+                      {ag.loggedOnUser && (
+                        <span className="text-[10px] text-indigo-600 font-mono block">
+                          Sesión: {ag.loggedOnUser}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => handleOpenReassign(ag)}
+                        className="text-[10px] text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer block"
+                      >
+                        {ag.employeeName ? 'Reasignar Colaborador' : '+ Asignar Colaborador'}
+                      </button>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3">
+                    <div className="font-mono text-[11px] text-slate-700">{ag.ipAddress}</div>
+                    <div className="text-[10px] text-slate-400 font-mono">{ag.macAddress}</div>
+                    <div className="mt-1 flex items-center gap-1">
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1 font-mono">
+                        <Database className="w-2.5 h-2.5" />
+                        Firestore Realtime
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3">
+                    <div className="space-y-1">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        En Línea
+                      </span>
+                      <div className="flex items-center gap-1 text-slate-500 text-[10px]">
+                        <Clock className="w-3 h-3 text-slate-400" />
+                        <span>{ag.lastPing}</span>
+                      </div>
+                    </div>
                   </td>
                   <td className="py-3 px-3 text-right">
                     <div className="flex items-center justify-end gap-1.5 flex-wrap">
                       <button
                         onClick={() => handleOpenAgentSecurity(ag)}
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-rose-700 hover:text-white hover:bg-rose-600 bg-rose-50 border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"
+                        className="px-2 py-1 rounded-lg text-[10px] font-bold text-rose-700 hover:text-white hover:bg-rose-600 bg-rose-50 border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"
                         title="Control Remoto: Bloqueo BitLocker, Bloqueo de Pantalla y Avisos"
                       >
                         <ShieldAlert className="w-3.5 h-3.5" />
-                        <span>Bloqueo & BitLocker</span>
+                        <span>BitLocker</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleOpenReassign(ag)}
+                        className="px-2 py-1 rounded-lg text-[10px] font-bold text-slate-700 hover:text-white hover:bg-slate-700 bg-slate-100 border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Vincular Almacén o Colaborador"
+                      >
+                        <Settings className="w-3 h-3" />
+                        <span>Ajustar</span>
                       </button>
 
                       {ag.linkedAssetTag ? (
@@ -2324,7 +2668,7 @@ try {
                         <button
                           onClick={() => incorporateAgentIntoInventory(ag)}
                           className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] inline-flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
-                          title="Dar de alta como activo oficial en el inventario de hardware"
+                          title="Dar de alta como activo oficial en el inventario de hardware de Google Cloud Firestore"
                         >
                           <PlusCircle className="w-3.5 h-3.5" />
                           <span>Incorporar</span>
@@ -2338,6 +2682,130 @@ try {
           </table>
         </div>
       </div>
+
+      {/* Reassign Warehouse / Employee / Asset Tag Modal */}
+      {reassignAgentModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-50 text-indigo-700">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">
+                    Asignación de Almacén y Colaborador
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    Terminal: {reassignAgentModal.hostname} ({reassignAgentModal.specs.serialNumber || 'Sin serie'})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setReassignAgentModal(null)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              {/* Google Cloud info */}
+              <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 flex items-center gap-2 font-mono text-[11px]">
+                <Database className="w-4 h-4 text-blue-600 shrink-0" />
+                <div>
+                  <span>Sincronizando con Google Cloud Firestore</span>
+                  <div className="text-[10px] text-blue-700 truncate">
+                    BD: ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e
+                  </div>
+                </div>
+              </div>
+
+              {/* Warehouse selector */}
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Almacén / Sede de Radicación:</span>
+                </label>
+                <select
+                  value={reassignBranchId}
+                  onChange={(e) => setReassignBranchId(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 bg-white font-medium focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                >
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.city}){b.isMainWarehouse ? ' ★ Almacén Principal' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Employee selector */}
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Colaborador Custodio Asignado:</span>
+                </label>
+                <select
+                  value={reassignEmployeeId}
+                  onChange={(e) => setReassignEmployeeId(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 bg-white font-medium focus:ring-2 focus:ring-indigo-500 outline-hidden"
+                >
+                  <option value="">-- Sin asignar (Stock disponible en Almacén) --</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.fullName} - {emp.position} ({emp.department})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Asset Tag */}
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1 flex items-center gap-1.5">
+                  <Boxes className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Placa de Inventario Vinculada:</span>
+                </label>
+                <input
+                  type="text"
+                  value={reassignAssetTag}
+                  onChange={(e) => setReassignAssetTag(e.target.value)}
+                  placeholder="Ej: EQ-LAP-001 o dejar en blanco"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-sm tracking-tight text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-hidden uppercase caret-[#ff8200]"
+                />
+              </div>
+
+              {reassignAgentModal.loggedOnUser && (
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700">
+                  <span className="text-[10px] text-slate-400 block">Usuario detectado en sesión Windows:</span>
+                  <strong className="font-mono text-slate-900">{reassignAgentModal.loggedOnUser}</strong>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setReassignAgentModal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={assignLoading}
+                onClick={handleSaveReassignment}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold text-xs transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                {assignLoading ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+                <span>Guardar Cambios</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Manual JSON Import Modal */}
       {showImportModal && (
@@ -2402,15 +2870,15 @@ try {
 
               {/* Or paste JSON text */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   O pega el contenido JSON directamente:
                 </label>
                 <textarea
-                  rows={4}
+                  rows={5}
                   value={importJsonText}
                   onChange={(e) => setImportJsonText(e.target.value)}
                   placeholder='{"hostname": "PETROIL-W11-PC", "serialNumber": "SN-...", "os": "Windows 11...", "cpu": "...", "ram": "16 GB"}'
-                  className="w-full text-xs font-mono p-3 rounded-xl border border-slate-200 focus:outline-indigo-500 bg-slate-50"
+                  className="w-full text-[13px] font-mono leading-relaxed p-3.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-hidden bg-slate-50 focus:bg-white text-slate-900 caret-[#ff8200]"
                 />
               </div>
             </div>

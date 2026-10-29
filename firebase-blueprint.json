@@ -139,6 +139,20 @@
         "status": { "type": "string" }
       },
       "required": ["id", "email", "name", "role", "status"]
+    },
+    "DeviceCommand": {
+      "title": "Device Command",
+      "description": "Remote security command for BitLocker, screen lock, or messages",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "agentId": { "type": "string" },
+        "targetHostname": { "type": "string" },
+        "commandType": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "agentId", "targetHostname", "commandType", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -181,6 +195,10 @@
     "/systemUsers/{userId}": {
       "schema": "SystemUser",
       "description": "System access operators and RBAC role profiles"
+    },
+    "/deviceCommands/{commandId}": {
+      "schema": "DeviceCommand",
+      "description": "Remote commands dispatched to production agents"
     }
   }
 }

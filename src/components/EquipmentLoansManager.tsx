@@ -401,13 +401,13 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Search */}
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar por folio, colaborador, placa, modelo..."
-            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+            className="w-full pl-10 pr-4 py-2.5 text-sm font-medium text-slate-900 bg-white border border-slate-300 rounded-xl placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] caret-[#ff8200] transition-all"
           />
         </div>
 
@@ -620,7 +620,7 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleCreateLoanSubmit} className="p-6 overflow-y-auto space-y-4 text-xs">
+            <form onSubmit={handleCreateLoanSubmit} className="p-6 overflow-y-auto space-y-4 text-sm">
               {/* Asset & Employee Pickers */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -631,7 +631,7 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
                     value={selectedAssetId}
                     onChange={(e) => setSelectedAssetId(e.target.value)}
                     required
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+                    className="w-full px-3.5 py-2.5 text-sm font-medium border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                   >
                     <option value="">-- Seleccionar Equipo Disponible --</option>
                     {availableAssets.map((a) => (
@@ -655,7 +655,7 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
                     value={selectedEmployeeId}
                     onChange={(e) => setSelectedEmployeeId(e.target.value)}
                     required
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+                    className="w-full px-3.5 py-2.5 text-sm font-medium border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                   >
                     <option value="">-- Seleccionar Colaborador --</option>
                     {employees.map((emp) => (
@@ -678,7 +678,7 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                     required
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    className="w-full px-3.5 py-2.5 text-sm font-medium border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
 
@@ -691,7 +691,7 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
                     value={expectedReturnDate}
                     onChange={(e) => setExpectedReturnDate(e.target.value)}
                     required
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                    className="w-full px-3.5 py-2.5 text-sm font-medium border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
 
@@ -702,7 +702,7 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
                   <select
                     value={purpose}
                     onChange={(e) => setPurpose(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+                    className="w-full px-3.5 py-2.5 text-sm font-medium border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                   >
                     <option value="viaje_trabajo">Viaje de Trabajo / Comisión</option>
                     <option value="capacitacion">Capacitación / Congreso</option>
@@ -724,7 +724,7 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
                   value={purposeDescription}
                   onChange={(e) => setPurposeDescription(e.target.value)}
                   placeholder="Ej. Auditoría técnica en Planta Mazatlán, sustituto provisional..."
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 text-sm font-medium border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                 />
               </div>
 
@@ -928,7 +928,7 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
                   value={returnNotes}
                   onChange={(e) => setReturnNotes(e.target.value)}
                   placeholder="Se reciben cargador, cables y mochila completos. Equipo enciende correctamente..."
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
+                  className="w-full p-3.5 text-sm leading-relaxed text-slate-900 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200] resize-none"
                 />
               </div>
 

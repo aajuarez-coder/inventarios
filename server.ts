@@ -85,6 +85,14 @@ interface StoredAgent {
   macAddress: string;
   branchId?: string;
   branchName?: string;
+  warehouseId?: string;
+  warehouseName?: string;
+  employeeId?: string;
+  employeeName?: string;
+  employeeEmail?: string;
+  loggedOnUser?: string;
+  firestoreDatabaseId?: string;
+  firestoreProjectId?: string;
   lastPing: string;
   lastPingTimestamp: number;
   status: 'online' | 'offline';
@@ -214,6 +222,15 @@ app.post('/api/v1/telemetry', (req, res) => {
       };
     }
 
+    const warehouseId = payload.warehouseId || payload.branchId;
+    const warehouseName = payload.warehouseName || payload.branchName || 'Sede Principal Petroil';
+    const employeeId = payload.employeeId;
+    const employeeName = payload.employeeName;
+    const employeeEmail = payload.employeeEmail;
+    const loggedOnUser = payload.loggedOnUser || payload.username || payload.currentUser || payload.user;
+    const firestoreDatabaseId = payload.firestoreDatabaseId || payload.cloudFirestoreDb || 'ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e';
+    const firestoreProjectId = payload.firestoreProjectId || payload.cloudProjectId || 'gen-lang-client-0946159343';
+
     const agentRecord: StoredAgent = {
       id: agentId,
       hostname,
@@ -221,8 +238,16 @@ app.post('/api/v1/telemetry', (req, res) => {
       osVersion: osRaw,
       ipAddress: payload.ipAddress || clientIp,
       macAddress: payload.macAddress || '00:00:00:00:00:00',
-      branchId: payload.branchId,
-      branchName: payload.branchName || 'Sede Principal Petroil',
+      branchId: payload.branchId || warehouseId,
+      branchName: payload.branchName || warehouseName,
+      warehouseId,
+      warehouseName,
+      employeeId,
+      employeeName,
+      employeeEmail,
+      loggedOnUser,
+      firestoreDatabaseId,
+      firestoreProjectId,
       lastPing: 'Hace unos segundos',
       lastPingTimestamp: Date.now(),
       status: 'online',
@@ -244,7 +269,12 @@ app.post('/api/v1/telemetry', (req, res) => {
       cachedAgents[existingIndex] = {
         ...cachedAgents[existingIndex],
         ...agentRecord,
-        linkedAssetTag: cachedAgents[existingIndex].linkedAssetTag // preserve link
+        linkedAssetTag: cachedAgents[existingIndex].linkedAssetTag, // preserve link
+        employeeId: employeeId || cachedAgents[existingIndex].employeeId,
+        employeeName: employeeName || cachedAgents[existingIndex].employeeName,
+        employeeEmail: employeeEmail || cachedAgents[existingIndex].employeeEmail,
+        warehouseId: warehouseId || cachedAgents[existingIndex].warehouseId,
+        warehouseName: warehouseName || cachedAgents[existingIndex].warehouseName
       };
     } else {
       cachedAgents.unshift(agentRecord);
@@ -311,6 +341,25 @@ app.post('/api/v1/agents/link', (req, res) => {
   const agent = cachedAgents.find(a => a.id === agentId);
   if (agent) {
     agent.linkedAssetTag = assetTag;
+    saveStoredAgents(cachedAgents);
+    return res.json({ success: true, agent });
+  }
+  return res.status(404).json({ success: false, error: 'Agente no encontrado' });
+});
+
+// Reassign an agent to warehouse, employee, and/or asset tag
+app.post('/api/v1/agents/assign', (req, res) => {
+  const { agentId, branchId, branchName, warehouseId, warehouseName, employeeId, employeeName, employeeEmail, linkedAssetTag } = req.body;
+  const agent = cachedAgents.find(a => a.id === agentId);
+  if (agent) {
+    if (branchId !== undefined) agent.branchId = branchId;
+    if (branchName !== undefined) agent.branchName = branchName;
+    if (warehouseId !== undefined) agent.warehouseId = warehouseId;
+    if (warehouseName !== undefined) agent.warehouseName = warehouseName;
+    if (employeeId !== undefined) agent.employeeId = employeeId;
+    if (employeeName !== undefined) agent.employeeName = employeeName;
+    if (employeeEmail !== undefined) agent.employeeEmail = employeeEmail;
+    if (linkedAssetTag !== undefined) agent.linkedAssetTag = linkedAssetTag;
     saveStoredAgents(cachedAgents);
     return res.json({ success: true, agent });
   }

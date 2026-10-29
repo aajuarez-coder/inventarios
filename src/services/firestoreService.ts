@@ -58,7 +58,8 @@ export const COLLECTIONS = {
   TIMELINE: 'timeline',
   EMAIL_LOGS: 'emailLogs',
   LOANS: 'loans',
-  SYSTEM_USERS: 'systemUsers'
+  SYSTEM_USERS: 'systemUsers',
+  DEVICE_COMMANDS: 'deviceCommands'
 } as const;
 
 /**

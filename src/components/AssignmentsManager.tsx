@@ -309,13 +309,13 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
       {/* Search & Filter */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between gap-3 text-xs no-print">
         <div className="relative w-full max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Buscar por folio responsiva (RESP-2026-...), serie, activo, o colaborador..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-hidden"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:border-[#ff8200] focus:ring-2 focus:ring-[#ff8200]/20 outline-hidden caret-[#ff8200]"
           />
         </div>
 
@@ -821,18 +821,18 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleCreateAssignment} className="p-6 overflow-y-auto space-y-4 text-xs">
+            <form onSubmit={handleCreateAssignment} className="p-6 overflow-y-auto space-y-4 text-sm">
               
               {/* Asset selection */}
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">
+                <label className="font-semibold text-slate-700 block mb-1 text-xs sm:text-[13px]">
                   1. Seleccione Equipo Disponible del Almacén *
                 </label>
                 <select
                   required
                   value={selectedAssetId}
                   onChange={(e) => setSelectedAssetId(e.target.value)}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white outline-hidden"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 text-sm font-medium focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                 >
                   <option value="">-- Seleccionar Equipo Disponible --</option>
                   {availableAssets.map(a => (
@@ -850,14 +850,14 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
 
               {/* Employee selection */}
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">
+                <label className="font-semibold text-slate-700 block mb-1 text-xs sm:text-[13px]">
                   2. Seleccione Colaborador Destinatario *
                 </label>
                 <select
                   required
                   value={selectedEmployeeId}
                   onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white outline-hidden"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 text-sm font-medium focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                 >
                   <option value="">-- Seleccionar Colaborador --</option>
                   {employees.map(e => (
@@ -870,20 +870,20 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
 
               {/* Accessories delivered */}
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">
+                <label className="font-semibold text-slate-700 block mb-1 text-xs sm:text-[13px]">
                   3. Accesorios y Periféricos Incluidos en la Entrega:
                 </label>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {selectedAccessories.map((acc, idx) => (
                     <span 
                       key={idx} 
-                      className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-200 flex items-center gap-1.5"
+                      className="px-3 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-200 text-xs font-medium flex items-center gap-1.5"
                     >
                       {acc}
                       <button 
                         type="button" 
                         onClick={() => handleRemoveAccessory(acc)}
-                        className="text-slate-400 hover:text-rose-600 font-bold"
+                        className="text-slate-400 hover:text-rose-600 font-bold cursor-pointer"
                       >
                         ×
                       </button>
@@ -897,12 +897,12 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
                     placeholder="Agregar otro accesorio (ej: Candado Kensington, Adaptador HDMI)..."
                     value={customAccessory}
                     onChange={(e) => setCustomAccessory(e.target.value)}
-                    className="flex-1 p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="flex-1 px-3.5 py-2.5 text-sm font-medium border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                   <button
                     type="button"
                     onClick={handleAddAccessory}
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium"
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-xl font-semibold cursor-pointer transition-colors"
                   >
                     Agregar
                   </button>
@@ -911,12 +911,12 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
 
               {/* Delivery notes */}
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Observaciones / Condiciones Físicas:</label>
+                <label className="font-semibold text-slate-700 block mb-1 text-xs sm:text-[13px]">Observaciones / Condiciones Físicas:</label>
                 <textarea
                   rows={2}
                   value={deliveryNotes}
                   onChange={(e) => setDeliveryNotes(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                  className="w-full p-3.5 border border-slate-300 rounded-xl text-sm leading-relaxed text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                 />
               </div>
 
@@ -961,11 +961,11 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
               </p>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Almacén / Sede de Devolución: *</label>
+                <label className="font-semibold text-slate-700 block mb-1 text-xs sm:text-[13px]">Almacén / Sede de Devolución: *</label>
                 <select
                   value={returnBranchId}
                   onChange={(e) => setReturnBranchId(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden font-medium"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 text-sm font-medium focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                 >
                   {branches.map(b => (
                     <option key={b.id} value={b.id}>
@@ -973,17 +973,17 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
                     </option>
                   ))}
                 </select>
-                <p className="text-[10px] text-slate-500 mt-1">
+                <p className="text-[11px] text-slate-500 mt-1">
                   El equipo quedará registrado como disponible en esta ubicación.
                 </p>
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Estado Físico al Devolver:</label>
+                <label className="font-semibold text-slate-700 block mb-1 text-xs sm:text-[13px]">Estado Físico al Devolver:</label>
                 <select
                   value={returnCondition}
                   onChange={(e) => setReturnCondition(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 text-sm font-medium focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                 >
                   <option value="excelente">Excelente (Sin detalles cosméticos)</option>
                   <option value="bueno">Bueno (Desgaste natural de uso)</option>
@@ -993,12 +993,12 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Notas de Recepción:</label>
+                <label className="font-semibold text-slate-700 block mb-1 text-xs sm:text-[13px]">Notas de Recepción:</label>
                 <textarea
                   rows={3}
                   value={returnNotes}
                   onChange={(e) => setReturnNotes(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                  className="w-full p-3.5 border border-slate-300 rounded-xl text-sm leading-relaxed text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                 />
               </div>
 

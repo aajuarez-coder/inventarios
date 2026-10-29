@@ -806,6 +806,11 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const retireAsset = (id: string, reason: string) => {
+    const existing = assets.find(a => a.id === id);
+    if (existing) {
+      const updated = { ...existing, status: 'baja' as const, notes: `${existing.notes || ''} [Baja formal: ${reason}]` };
+      saveDocumentToFirestore(COLLECTIONS.ASSETS, id, updated);
+    }
     setAssets(prev => prev.map(a => a.id === id ? { ...a, status: 'baja', notes: `${a.notes || ''} [Baja formal: ${reason}]` } : a));
     logEvent({
       assetId: id,
@@ -1205,14 +1210,16 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setTransfers(prev => [newTransfer, ...prev]);
     saveDocumentToFirestore(COLLECTIONS.TRANSFERS, newTransfer.id, newTransfer);
 
-    // Update assets status to 'traslado'
+    // Update assets status to 'traslado' and save to Firestore
     setAssets(prev => prev.map(a => {
       if (transferData.assetIds.includes(a.id)) {
-        return {
+        const updated = {
           ...a,
-          status: 'traslado',
+          status: 'traslado' as const,
           locationDetails: `En traslado por ${transferData.carrier} (Guía: ${transferData.trackingNumber})`
         };
+        saveDocumentToFirestore(COLLECTIONS.ASSETS, a.id, updated);
+        return updated;
       }
       return a;
     }));
@@ -1236,28 +1243,27 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!trf) return;
 
     const arrivalDate = new Date().toISOString().split('T')[0];
+    const updatedTransfer = {
+      ...trf,
+      status: 'recibido' as const,
+      actualArrival: arrivalDate,
+      receivedBy
+    };
+    saveDocumentToFirestore(COLLECTIONS.TRANSFERS, transferId, updatedTransfer);
 
-    setTransfers(prev => prev.map(t => {
-      if (t.id === transferId) {
-        return {
-          ...t,
-          status: 'recibido',
-          actualArrival: arrivalDate,
-          receivedBy
-        };
-      }
-      return t;
-    }));
+    setTransfers(prev => prev.map(t => t.id === transferId ? updatedTransfer : t));
 
-    // Update assets to new branch and disponible
+    // Update assets to new branch and disponible and save to Firestore
     setAssets(prev => prev.map(a => {
       if (trf.assetIds.includes(a.id)) {
-        return {
+        const updatedAsset = {
           ...a,
           branchId: trf.targetBranchId,
-          status: 'disponible',
+          status: 'disponible' as const,
           locationDetails: 'Almacén Sucursal Destino'
         };
+        saveDocumentToFirestore(COLLECTIONS.ASSETS, a.id, updatedAsset);
+        return updatedAsset;
       }
       return a;
     }));
@@ -1440,16 +1446,18 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       saveDocumentToFirestore(COLLECTIONS.LOANS, loanId, updatedLoanObj);
     }
 
-    // Free asset to disponible
+    // Free asset to disponible and save to Firestore
     setAssets(prev => prev.map(a => {
       if (a.id === loan.assetId) {
-        return {
+        const updatedAsset = {
           ...a,
-          status: 'disponible',
+          status: 'disponible' as const,
           physicalCondition: conditionOnReturn,
           assignedToEmployeeId: undefined,
           assignedDate: undefined
         };
+        saveDocumentToFirestore(COLLECTIONS.ASSETS, a.id, updatedAsset);
+        return updatedAsset;
       }
       return a;
     }));
@@ -1540,6 +1548,9 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         };
       }
 
+      // Persist command to Google Cloud Firestore in real time
+      saveDocumentToFirestore(COLLECTIONS.DEVICE_COMMANDS, command.id, command);
+
       // Log to timeline
       let eventType: TimelineEvent['type'] = 'actualizacion';
       let title = `Comando Remoto: ${params.commandType}`;
@@ -1549,10 +1560,36 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         eventType = 'bloqueo_bitlocker';
         title = `Bloqueo de Seguridad BitLocker Solicitado`;
         desc = `Fuerza recuperación de arranque y bloqueo de volumen BitLocker. Motivo: ${params.parameters?.reason || 'Solicitud de seguridad por sospecha o extravío'}.`;
+        if (asset) {
+          const updatedAsset = {
+            ...asset,
+            bitlockerStatus: {
+              ...(asset.bitlockerStatus || { drive: 'C:', encryptionMethod: 'XTS-AES-256', tpmPresent: true, lastStatusCheck: new Date().toISOString() }),
+              protectionStatus: 'Bloqueado' as const,
+              lockState: 'locked' as const,
+              lastStatusCheck: new Date().toISOString()
+            }
+          };
+          saveDocumentToFirestore(COLLECTIONS.ASSETS, asset.id, updatedAsset);
+          setAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
+        }
       } else if (params.commandType === 'bitlocker_unlock') {
         eventType = 'desbloqueo_bitlocker';
         title = `Desbloqueo / Restauración BitLocker`;
         desc = `Protectores TPM de BitLocker reactivados para arranque normal.`;
+        if (asset) {
+          const updatedAsset = {
+            ...asset,
+            bitlockerStatus: {
+              ...(asset.bitlockerStatus || { drive: 'C:', encryptionMethod: 'XTS-AES-256', tpmPresent: true, lastStatusCheck: new Date().toISOString() }),
+              protectionStatus: 'Protegido' as const,
+              lockState: 'unlocked' as const,
+              lastStatusCheck: new Date().toISOString()
+            }
+          };
+          saveDocumentToFirestore(COLLECTIONS.ASSETS, asset.id, updatedAsset);
+          setAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
+        }
       } else if (params.commandType === 'screen_lock') {
         eventType = 'bloqueo_pantalla';
         title = `Bloqueo Inmediato de Pantalla`;
@@ -1586,6 +1623,9 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
       if (res.ok) {
         const data = await res.json();
+        if (data.command) {
+          saveDocumentToFirestore(COLLECTIONS.DEVICE_COMMANDS, data.command.id, data.command);
+        }
         triggerCloudSyncAnimation();
         return { success: true, command: data.command };
       }

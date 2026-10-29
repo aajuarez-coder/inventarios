@@ -368,14 +368,14 @@ export const MaintenanceCalendar: React.FC<MaintenanceCalendarProps> = ({
       <div className="p-3.5 rounded-[6px] bg-[#131a26] border border-[rgba(248,250,252,0.1)] flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
         
         {/* Search */}
-        <div className="relative w-full md:w-72">
-          <Search className="w-3.5 h-3.5 text-[rgba(248,250,252,0.4)] absolute left-3 top-1/2 -translate-y-1/2" />
+        <div className="relative w-full md:w-80">
+          <Search className="w-4 h-4 text-[rgba(248,250,252,0.45)] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Buscar por placa, equipo o colaborador..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#0a0e14] border border-[rgba(248,250,252,0.1)] rounded-[6px] pl-9 pr-3 py-1.5 text-xs text-[#f8fafc] placeholder:text-[rgba(248,250,252,0.35)] focus:border-[#ff8200] outline-hidden font-mono"
+            className="w-full bg-[#0a0e14] border border-[rgba(248,250,252,0.18)] rounded-xl pl-10 pr-4 py-2 text-sm text-[#f8fafc] placeholder:text-[rgba(248,250,252,0.45)] font-medium focus:border-[#ff8200] focus:ring-2 focus:ring-[#ff8200]/25 outline-hidden caret-[#ff8200]"
           />
         </div>
 
@@ -752,27 +752,27 @@ export const MaintenanceCalendar: React.FC<MaintenanceCalendarProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-mono uppercase text-[rgba(248,250,252,0.6)] mb-1">
+                  <label className="block text-xs font-mono uppercase tracking-wider text-[rgba(248,250,252,0.7)] mb-1">
                     Nueva Fecha de Mantenimiento Programada
                   </label>
                   <input
                     type="date"
                     value={newScheduleDate}
                     onChange={(e) => setNewScheduleDate(e.target.value)}
-                    className="w-full bg-[#0a0e14] border border-[rgba(248,250,252,0.15)] rounded-[6px] px-3 py-2 text-xs text-[#f8fafc] font-mono focus:border-[#ff8200] outline-hidden"
+                    className="w-full bg-[#0a0e14] border border-[rgba(248,250,252,0.2)] rounded-xl px-3.5 py-2.5 text-sm text-[#f8fafc] font-mono focus:border-[#ff8200] focus:ring-2 focus:ring-[#ff8200]/25 outline-hidden caret-[#ff8200]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-mono uppercase text-[rgba(248,250,252,0.6)] mb-1">
+                  <label className="block text-xs font-mono uppercase tracking-wider text-[rgba(248,250,252,0.7)] mb-1">
                     Motivo / Observación de Reprogramación (Opcional)
                   </label>
                   <textarea
-                    rows={2}
+                    rows={3}
                     value={rescheduleNotes}
                     onChange={(e) => setRescheduleNotes(e.target.value)}
                     placeholder="Ej. Solicitud de usuario por viaje laboral o requerimiento de taller..."
-                    className="w-full bg-[#0a0e14] border border-[rgba(248,250,252,0.15)] rounded-[6px] px-3 py-2 text-xs text-[#f8fafc] placeholder:text-[rgba(248,250,252,0.3)] focus:border-[#ff8200] outline-hidden"
+                    className="w-full bg-[#0a0e14] border border-[rgba(248,250,252,0.2)] rounded-xl p-3.5 text-sm leading-relaxed text-[#f8fafc] placeholder:text-[rgba(248,250,252,0.4)] focus:border-[#ff8200] focus:ring-2 focus:ring-[#ff8200]/25 outline-hidden caret-[#ff8200]"
                   />
                 </div>
 

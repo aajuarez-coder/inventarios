@@ -335,7 +335,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
           <button
             onClick={() => {
               if (!canEdit) {
-                setPermissionNotice('Acceso Denegado (Perfil Visor): Su usuario tiene permisos de solo lectura. Para registrar o editar activos se requiere el perfil de "Edición Total" o "Administrador TI". Puede cambiar de rol en la esquina superior derecha.');
+                setPermissionNotice('Acceso Denegado (Perfil Visor): Su usuario tiene permisos de solo lectura. Para registrar o editar activos se requiere una cuenta con permisos de "Edición Total" o "Administrador TI".');
                 setTimeout(() => setPermissionNotice(null), 7000);
                 return;
               }
@@ -457,7 +457,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
               placeholder="Filtrar por placa, serie, marca, modelo, procesador..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-hidden"
+              className="w-full text-sm font-medium tracking-tight pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:border-[#ff8200] focus:ring-2 focus:ring-[#ff8200]/20 outline-hidden placeholder:text-slate-400 caret-[#ff8200]"
             />
             {search && (
               <button 
@@ -503,7 +503,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-xs focus:ring-2 focus:ring-indigo-100 outline-hidden"
+            className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium shadow-xs focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
           >
             <option value="all">Todas las Categorías</option>
             <option value="laptop">Laptops / Portátiles</option>
@@ -518,7 +518,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-xs focus:ring-2 focus:ring-indigo-100 outline-hidden"
+            className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium shadow-xs focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
           >
             <option value="all">Todos los Estados</option>
             <option value="disponible">En Almacén (Disponibles)</option>
@@ -532,7 +532,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
           <select
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-xs focus:ring-2 focus:ring-indigo-100 outline-hidden"
+            className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium shadow-xs focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
           >
             <option value="all">Todas las Sucursales</option>
             {branches.map(b => (
@@ -1008,40 +1008,40 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="p-6 overflow-y-auto space-y-4 text-xs">
+            <form onSubmit={handleCreateSubmit} className="p-6 overflow-y-auto space-y-4 text-sm">
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Placa de Inventario (Asset Tag) *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Placa de Inventario (Asset Tag) *</label>
                   <input
                     type="text"
                     required
                     value={formData.assetTag}
                     onChange={(e) => setFormData({ ...formData, assetTag: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-indigo-100 outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl font-mono text-[13px] text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden uppercase caret-[#ff8200]"
                   />
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Número de Serie (S/N) *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Número de Serie (S/N) *</label>
                   <input
                     type="text"
                     required
                     placeholder="Ej. PF39KLA901"
                     value={formData.serialNumber}
                     onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-indigo-100 outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl font-mono text-[13px] text-slate-900 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden uppercase caret-[#ff8200]"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Categoría *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Categoría *</label>
                   <select
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value as AssetCategory })}
-                    className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                   >
                     <option value="laptop">Laptop / Portátil</option>
                     <option value="desktop">Computadora de Escritorio</option>
@@ -1053,88 +1053,91 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Marca *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Marca *</label>
                   <input
                     type="text"
                     required
                     placeholder="Ej. Lenovo, Dell, Apple, HP"
                     value={formData.brand}
                     onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Modelo *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Modelo *</label>
                   <input
                     type="text"
                     required
                     placeholder="Ej. ThinkPad T14 Gen 4"
                     value={formData.model}
                     onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
               </div>
 
               {/* Specs */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                <span className="font-bold text-slate-700 block text-[11px] uppercase tracking-wider">
+              <div className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200 space-y-3">
+                <span className="font-bold text-slate-700 block text-xs uppercase tracking-wider font-mono">
                   Especificaciones Técnicas de Hardware
                 </span>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="text-slate-600 block mb-1">Procesador (CPU)</label>
+                    <label className="text-slate-700 text-xs font-semibold block mb-1">Procesador (CPU)</label>
                     <input
                       type="text"
                       placeholder="Ej. Intel Core i7-1365U o Apple M3"
                       value={formData.cpu}
                       onChange={(e) => setFormData({ ...formData, cpu: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                     />
                   </div>
 
                   <div>
-                    <label className="text-slate-600 block mb-1">Memoria RAM</label>
+                    <label className="text-slate-700 text-xs font-semibold block mb-1">Memoria RAM</label>
                     <input
                       type="text"
+                      placeholder="Ej. 16 GB DDR5"
                       value={formData.ram}
                       onChange={(e) => setFormData({ ...formData, ram: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                     />
                   </div>
 
                   <div>
-                    <label className="text-slate-600 block mb-1">Almacenamiento (Disco)</label>
+                    <label className="text-slate-700 text-xs font-semibold block mb-1">Almacenamiento (Disco)</label>
                     <input
                       type="text"
+                      placeholder="Ej. 512 GB NVMe SSD"
                       value={formData.storage}
                       onChange={(e) => setFormData({ ...formData, storage: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                     />
                   </div>
 
                   <div>
-                    <label className="text-slate-600 block mb-1">Sistema Operativo</label>
+                    <label className="text-slate-700 text-xs font-semibold block mb-1">Sistema Operativo</label>
                     <input
                       type="text"
+                      placeholder="Ej. Windows 11 Pro 64-bit"
                       value={formData.os}
                       onChange={(e) => setFormData({ ...formData, os: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Location & Purchase */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Sucursal / Almacén *</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Sucursal / Almacén *</label>
                   <select
                     value={formData.branchId}
                     onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                   >
                     {branches.map(b => (
                       <option key={b.id} value={b.id}>{b.name}</option>
@@ -1143,22 +1146,22 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Costo de Compra (MXN)</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Costo de Compra (MXN)</label>
                   <input
                     type="number"
                     value={formData.purchaseCost}
                     onChange={(e) => setFormData({ ...formData, purchaseCost: Number(e.target.value) })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Vencimiento Garantía</label>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Vencimiento Garantía</label>
                   <input
                     type="date"
                     value={formData.warrantyEndDate}
                     onChange={(e) => setFormData({ ...formData, warrantyEndDate: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
               </div>
@@ -1167,7 +1170,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowNewModal(false)}
-                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium"
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium text-sm transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>

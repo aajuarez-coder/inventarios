@@ -612,10 +612,9 @@ export const SystemUsersManager: React.FC = () => {
                   ) : (
                     <span 
                       className="inline-flex items-center gap-1 text-[11px] text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200/80"
-                      title="Por seguridad de auditoría, para ingresar con esta cuenta debe cerrar la sesión actual e ingresar con sus credenciales o cuenta Google."
                     >
                       <Lock className="w-3 h-3 text-slate-400" />
-                      <span className="font-mono text-[10px]">Cambio bloqueado</span>
+                      <span className="font-mono text-[10px]">Cuenta Registrada</span>
                     </span>
                   )}
 

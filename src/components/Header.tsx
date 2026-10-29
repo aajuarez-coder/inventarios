@@ -130,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({
               placeholder="Buscar por placa, serie, colaborador, marca o modelo..."
               value={searchQuery}
               onChange={(e) => onSearch(e.target.value)}
-              className="w-full bg-[#0a0e14] hover:bg-[#0e141d] focus:bg-[#0a0e14] text-[0.85rem] pl-10 pr-8 py-2.5 rounded-[6px] border border-[rgba(248,250,252,0.1)] focus:border-[#ff8200] focus:ring-1 focus:ring-[#ff8200]/30 transition-all outline-hidden text-[#f8fafc] placeholder:text-[rgba(248,250,252,0.35)]"
+              className="w-full bg-[#0a0e14] hover:bg-[#0e141d] focus:bg-[#0a0e14] text-[0.875rem] font-medium tracking-tight pl-10 pr-8 py-2.5 rounded-[6px] border border-[rgba(248,250,252,0.18)] focus:border-[#ff8200] focus:ring-2 focus:ring-[#ff8200]/25 transition-all outline-hidden text-[#f8fafc] placeholder:text-[rgba(248,250,252,0.45)] placeholder:font-normal caret-[#ff8200]"
             />
             {searchQuery && (
               <button 
@@ -145,16 +145,21 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right controls */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Cloud Sync Status Indicator */}
+          {/* Google Cloud Firestore Real-Time Database Indicator */}
           <div 
             onClick={forceCloudSync}
-            title={`Base de datos en la nube provisionada y activa. Última sincronización: ${lastCloudSyncTime}. Haz clic para sincronizar.`}
-            className="label hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xs bg-[#1a1a1c] border border-[rgba(242,239,235,0.12)] cursor-pointer hover:border-[rgba(242,239,235,0.25)] transition-colors"
+            title={`Base de datos Google Cloud Firestore activa (ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e). Sincronización en tiempo real activa con producción. Última actualización: ${lastCloudSyncTime}. Haz clic para sincronizar.`}
+            className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-[6px] bg-[#131a26] border border-emerald-500/30 cursor-pointer hover:border-emerald-500/60 transition-all shadow-xs"
           >
-            <div className={`w-2 h-2 rounded-full ${isCloudSyncing ? 'bg-amber-400 animate-ping' : 'bg-[#10b981]'}`} />
-            <span className="font-mono text-[10px] tracking-wider text-[#f2efeb] uppercase font-medium">
-              {isCloudSyncing ? 'Sincronizando...' : 'Cloud Database Active'}
-            </span>
+            <div className={`w-2 h-2 rounded-full ${isCloudSyncing ? 'bg-amber-400 animate-ping' : 'bg-[#10b981] animate-pulse'}`} />
+            <div className="flex flex-col text-left">
+              <span className="font-mono text-[10px] tracking-wider text-emerald-300 uppercase font-bold flex items-center gap-1.5">
+                {isCloudSyncing ? 'Sincronizando...' : 'Google Cloud Firestore'}
+              </span>
+              <span className="font-mono text-[8px] text-[rgba(248,250,252,0.45)] uppercase leading-none">
+                Producción en Tiempo Real
+              </span>
+            </div>
           </div>
 
           {/* Gmail API Status Button */}
@@ -406,14 +411,6 @@ export const Header: React.FC<HeaderProps> = ({
                         {canEdit ? 'Escritura & Control Total' : 'Solo Lectura (Visor)'}
                       </span>
                     </div>
-                  </div>
-
-                  {/* Security Notice: Profile switching is explicitly blocked */}
-                  <div className="p-2.5 rounded-[4px] bg-[#131a26] border border-amber-500/20 text-[10px] text-amber-200/90 flex items-start gap-2">
-                    <Lock className="w-3.5 h-3.5 text-[#ff8200] shrink-0 mt-0.5" />
-                    <span className="leading-tight font-mono">
-                      <strong className="text-amber-100">Cambio de perfil no permitido:</strong> Por seguridad de auditoría, para ingresar con otro operador debe cerrar la sesión e ingresar con sus credenciales.
-                    </span>
                   </div>
                 </div>
 

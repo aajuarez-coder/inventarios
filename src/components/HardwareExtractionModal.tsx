@@ -508,7 +508,7 @@ fi
                       handleParseJson(e.target.value);
                     }}
                     placeholder={`{\n  "serialNumber": "PF39KLA901",\n  "brand": "Lenovo",\n  "model": "ThinkPad T14",\n  "cpu": "Intel Core i7-1365U",\n  "ram": "32 GB RAM",\n  "storage": "1000 GB NVMe SSD",\n  "os": "Windows 11 Pro",\n  "macAddress": "9C:B6:D0:41:A2:7B"\n}`}
-                    className="w-full font-mono text-xs p-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-100 outline-hidden bg-slate-50 focus:bg-white transition-colors"
+                    className="w-full font-mono text-[13px] leading-relaxed p-3.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-hidden bg-slate-50 focus:bg-white transition-colors text-slate-900 caret-[#ff8200]"
                   />
 
                   {parseError && (
@@ -589,23 +589,23 @@ fi
                       </div>
 
                       <div className="pt-2 border-t border-indigo-100 space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Asignar Placa (Asset Tag):</label>
+                            <label className="text-xs font-semibold text-slate-700 block mb-1">Asignar Placa (Asset Tag):</label>
                             <input
                               type="text"
                               value={assetTag}
                               onChange={(e) => setAssetTag(e.target.value)}
-                              className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs bg-white"
+                              className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono text-sm tracking-tight bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-hidden uppercase caret-[#ff8200]"
                             />
                           </div>
 
                           <div>
-                            <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Sucursal / Almacén:</label>
+                            <label className="text-xs font-semibold text-slate-700 block mb-1">Sucursal / Almacén:</label>
                             <select
                               value={assignedBranchId}
                               onChange={(e) => setAssignedBranchId(e.target.value)}
-                              className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white"
+                              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-medium bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-hidden cursor-pointer"
                             >
                               {branches.map(b => (
                                 <option key={b.id} value={b.id}>{b.name}</option>

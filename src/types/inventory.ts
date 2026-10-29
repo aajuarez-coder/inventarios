@@ -59,6 +59,7 @@ export interface HardwareAsset {
   latitude?: number;
   longitude?: number;
   lastGeoSync?: string;
+  bitlockerStatus?: BitLockerStatus;
 }
 
 export interface Employee {
