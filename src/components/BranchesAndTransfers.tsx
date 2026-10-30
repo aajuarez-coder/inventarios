@@ -304,42 +304,42 @@ export const BranchesAndTransfers: React.FC<BranchesAndTransfersProps> = ({
                   </div>
 
                   {/* Route */}
-                  <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg text-xs">
+                  <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg text-xs border border-slate-200">
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Origen:</span>
+                      <span className="text-[10px] uppercase font-bold text-slate-700 block">Origen:</span>
                       <strong className="text-slate-900 block truncate">{src?.city || 'Sede Origen'}</strong>
-                      <span className="text-[11px] text-slate-500">{src?.name}</span>
+                      <span className="text-[11.5px] text-slate-700 font-medium">{src?.name}</span>
                     </div>
 
-                    <ArrowRight className="w-5 h-5 text-indigo-400 shrink-0 mx-2" />
+                    <ArrowRight className="w-5 h-5 text-[#004a99] shrink-0 mx-2" />
 
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Destino:</span>
+                      <span className="text-[10px] uppercase font-bold text-slate-700 block">Destino:</span>
                       <strong className="text-slate-900 block truncate">{dst?.city || 'Sede Destino'}</strong>
-                      <span className="text-[11px] text-slate-500">{dst?.name}</span>
+                      <span className="text-[11.5px] text-slate-700 font-medium">{dst?.name}</span>
                     </div>
                   </div>
 
                   {/* Logistics info */}
-                  <div className="text-xs space-y-1 text-slate-600">
-                    <p>Paquetería: <strong className="text-slate-800">{trf.carrier}</strong></p>
-                    <p className="font-mono">Guía de rastreo: <strong className="text-indigo-900">{trf.trackingNumber}</strong></p>
-                    <p>Fecha de despacho: {formatDate(trf.shipmentDate)} • Estimado arribo: {formatDate(trf.estimatedArrival)}</p>
+                  <div className="text-xs space-y-1 text-slate-800 font-medium">
+                    <p>Paquetería: <strong className="text-slate-900">{trf.carrier}</strong></p>
+                    <p className="font-mono">Guía de rastreo: <strong className="text-[#004a99] font-bold">{trf.trackingNumber}</strong></p>
+                    <p className="text-slate-700">Fecha de despacho: <strong className="text-slate-900">{formatDate(trf.shipmentDate)}</strong> • Estimado arribo: <strong className="text-slate-900">{formatDate(trf.estimatedArrival)}</strong></p>
                     {trf.actualArrival && (
-                      <p className="text-emerald-700 font-medium">Recibido el {formatDate(trf.actualArrival)} por {trf.receivedBy}</p>
+                      <p className="text-emerald-800 font-bold">Recibido el {formatDate(trf.actualArrival)} por {trf.receivedBy}</p>
                     )}
                   </div>
 
                   {/* Assets list */}
-                  <div className="pt-2 border-t border-slate-100">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                  <div className="pt-2 border-t border-slate-200">
+                    <span className="text-[10.5px] uppercase font-bold text-slate-800 block mb-1">
                       Equipos en el Envío ({transferAssets.length}):
                     </span>
                     <div className="space-y-1">
                       {transferAssets.map(a => (
-                        <div key={a.id} className="text-[11px] font-mono text-slate-700 flex items-center justify-between">
-                          <span>[{a.assetTag}] {a.brand} {a.model}</span>
-                          <span className="text-slate-400">S/N: {a.serialNumber}</span>
+                        <div key={a.id} className="text-[11.5px] font-mono text-slate-800 flex items-center justify-between">
+                          <span className="font-semibold text-slate-900">[{a.assetTag}] {a.brand} {a.model}</span>
+                          <span className="text-slate-700 font-bold">S/N: {a.serialNumber}</span>
                         </div>
                       ))}
                     </div>

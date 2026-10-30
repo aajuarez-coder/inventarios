@@ -111,7 +111,7 @@ export const GeolocationModule: React.FC<GeolocationModuleProps> = ({
   preselectedAssetId,
   preselectedBranchId
 }) => {
-  const { branches, assets, transfers, employees, canEdit } = useInventory();
+  const { branches, assets, transfers, employees, canEdit, currentUser } = useInventory();
 
   // Filters state
   const [selectedBranchId, setSelectedBranchId] = useState<string>(preselectedBranchId || 'all');
@@ -130,10 +130,17 @@ export const GeolocationModule: React.FC<GeolocationModuleProps> = ({
   const [cameraTarget, setCameraTarget] = useState<{ lat: number; lng: number } | null>(null);
   const [cameraZoom, setCameraZoom] = useState<number>(DEFAULT_ZOOM);
 
-  // User Geolocation (GPS)
+  // User Geolocation (GPS / Network / Corporate Sede)
+  interface GpsNotice {
+    type: 'success' | 'info' | 'corporate';
+    title: string;
+    message: string;
+    method: 'gps' | 'network' | 'corporate_branch';
+    locationName?: string;
+  }
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsLoading, setGpsLoading] = useState<boolean>(false);
-  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [gpsNotice, setGpsNotice] = useState<GpsNotice | null>(null);
 
   // Sidebar / list toggle
   const [activeTab, setActiveTab] = useState<'sedes' | 'equipos' | 'traslados'>('sedes');
@@ -242,32 +249,124 @@ export const GeolocationModule: React.FC<GeolocationModuleProps> = ({
     return assets.filter(a => a.status === 'traslado').length;
   }, [assets]);
 
-  // Request browser geolocation
-  const handleGetMyLocation = () => {
-    if (!navigator.geolocation) {
-      setGpsError('La geolocalización no es compatible con su navegador.');
+  // Fallback resolver when browser hardware GPS is restricted by permissions policy or unavailable
+  const locateByNetworkOrCorporateBranch = useCallback(async (reasonText?: string) => {
+    // 1. Attempt location estimation via backend IP resolver
+    try {
+      const res = await fetch('/api/geolocation/lookup');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data.lat === 'number' && typeof data.lng === 'number') {
+          const coords = { lat: data.lat, lng: data.lng };
+          setUserLocation(coords);
+          setCameraTarget(coords);
+          setCameraZoom(13);
+
+          if (data.method === 'ip') {
+            setGpsNotice({
+              type: 'info',
+              title: `Ubicación estimada por Red IP (${data.city}, ${data.state})`,
+              message: `Posición aproximada detectada mediante conexión de red corporativa. El sensor GPS de hardware está restringido en este visor web seguro/iframe.`,
+              method: 'network',
+              locationName: `${data.city}, ${data.state}`
+            });
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      console.info('[Geolocation] Lookup endpoint bypassed:', e);
+    }
+
+    // 2. Fallback to user's assigned corporate branch or Matriz Corporativa Mazatlán
+    const userEmp = employees.find(e => e.email?.toLowerCase() === currentUser?.email?.toLowerCase());
+    const userBranch = 
+      branches.find(b => b.id === userEmp?.branchId) ||
+      branches.find(b => currentUser?.branchName && b.name.toLowerCase().includes(currentUser.branchName.toLowerCase())) ||
+      branches.find(b => b.code.includes('MZT')) || 
+      branches.find(b => b.isMainWarehouse) ||
+      branches[0];
+
+    if (userBranch) {
+      const coords = { lat: userBranch.latitude, lng: userBranch.longitude };
+      setUserLocation(coords);
+      setCameraTarget(coords);
+      setCameraZoom(14);
+      setActiveBranchInfoWindow(userBranch);
+      setSelectedBranchId(userBranch.id);
+      setGpsNotice({
+        type: 'corporate',
+        title: `Centrado en ${userBranch.name} (${userBranch.city})`,
+        message: `La directiva de seguridad del navegador iframe restringe el GPS físico. Se ubicó y enfocó automáticamente su sede corporativa de adscripción.`,
+        method: 'corporate_branch',
+        locationName: `${userBranch.name} - ${userBranch.city}`
+      });
+    }
+  }, [branches, employees, currentUser]);
+
+  // Request browser geolocation with seamless graceful fallback
+  const handleGetMyLocation = useCallback(() => {
+    setGpsLoading(true);
+    setGpsNotice(null);
+
+    // If geolocation is missing completely
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      locateByNetworkOrCorporateBranch('Navegador sin sensor GPS')
+        .finally(() => setGpsLoading(false));
       return;
     }
-    setGpsLoading(true);
-    setGpsError(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const coords = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude
-        };
-        setUserLocation(coords);
-        setCameraTarget(coords);
-        setCameraZoom(12);
-        setGpsLoading(false);
-      },
-      (err) => {
-        setGpsLoading(false);
-        setGpsError('No se pudo obtener la ubicación actual: ' + err.message);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  };
+
+    let responded = false;
+    const fallbackTimer = setTimeout(() => {
+      if (!responded) {
+        responded = true;
+        locateByNetworkOrCorporateBranch('Tiempo de espera GPS')
+          .finally(() => setGpsLoading(false));
+      }
+    }, 3500);
+
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (responded) return;
+          responded = true;
+          clearTimeout(fallbackTimer);
+          const coords = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          };
+          setUserLocation(coords);
+          setCameraTarget(coords);
+          setCameraZoom(14);
+          setGpsLoading(false);
+          setGpsNotice({
+            type: 'success',
+            title: 'Ubicación GPS precisa detectada',
+            message: 'Se ha ubicado su posición física mediante el sensor del dispositivo.',
+            method: 'gps',
+            locationName: 'Coordenadas GPS Dispositivo'
+          });
+        },
+        (err) => {
+          if (responded) return;
+          responded = true;
+          clearTimeout(fallbackTimer);
+          console.info('[Geolocation] Hardware GPS restricted by permissions policy:', err.message);
+          // Never display "Geolocation has been disabled in this document by permissions policy"
+          // Smoothly fall back to IP / Corporate Headquarters
+          locateByNetworkOrCorporateBranch(err.message)
+            .finally(() => setGpsLoading(false));
+        },
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 }
+      );
+    } catch (e: any) {
+      if (responded) return;
+      responded = true;
+      clearTimeout(fallbackTimer);
+      locateByNetworkOrCorporateBranch(e?.message || 'Error de permisos')
+        .finally(() => setGpsLoading(false));
+    }
+  }, [locateByNetworkOrCorporateBranch]);
 
   const handleResetCamera = () => {
     setCameraTarget(DEFAULT_CENTER);
@@ -276,6 +375,7 @@ export const GeolocationModule: React.FC<GeolocationModuleProps> = ({
     setActiveBranchInfoWindow(null);
     setActiveAssetInfoWindow(null);
     setActiveTransferInfoWindow(null);
+    setGpsNotice(null);
   };
 
   const handleFocusBranch = (branch: Branch) => {
@@ -336,10 +436,19 @@ export const GeolocationModule: React.FC<GeolocationModuleProps> = ({
             onClick={handleGetMyLocation}
             disabled={gpsLoading}
             className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            title="Localizar mi posición con el GPS del dispositivo"
+            title="Localizar posición mediante GPS, Red o Sede Corporativa"
           >
             <Crosshair className={`w-3.5 h-3.5 text-indigo-600 ${gpsLoading ? 'animate-spin' : ''}`} />
             <span>{gpsLoading ? 'Localizando...' : 'Mi Ubicación'}</span>
+          </button>
+
+          <button
+            onClick={() => locateByNetworkOrCorporateBranch('Selección directa de sede')}
+            className="px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer border border-indigo-200/60"
+            title="Centrar mapa en su Sede Corporativa de Adscripción"
+          >
+            <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Mi Sede</span>
           </button>
 
           <button
@@ -503,17 +612,40 @@ export const GeolocationModule: React.FC<GeolocationModuleProps> = ({
         </div>
       </div>
 
-      {gpsError && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-xl text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>{gpsError}</span>
+      {gpsNotice && (
+        <div className={`p-3.5 rounded-2xl border text-xs flex items-start justify-between gap-3 animate-in fade-in transition-all ${
+          gpsNotice.type === 'success'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+            : gpsNotice.type === 'corporate'
+            ? 'bg-amber-50/80 border-amber-200 text-amber-950'
+            : 'bg-indigo-50 border-indigo-200 text-indigo-950'
+        }`}>
+          <div className="flex items-start gap-2.5">
+            {gpsNotice.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+            ) : gpsNotice.type === 'corporate' ? (
+              <Building2 className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+            ) : (
+              <Wifi className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
+            )}
+            <div>
+              <div className="font-bold text-[13px] flex items-center gap-2 flex-wrap">
+                <span>{gpsNotice.title}</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/80 border border-current/20 font-semibold uppercase">
+                  {gpsNotice.method === 'gps' ? 'GPS Dispositivo' : gpsNotice.method === 'network' ? 'Red IP' : 'Sede Corporativa'}
+                </span>
+              </div>
+              <p className="mt-0.5 text-slate-600 leading-relaxed">
+                {gpsNotice.message}
+              </p>
+            </div>
           </div>
           <button 
-            onClick={() => setGpsError(null)} 
-            className="text-amber-700 font-bold hover:underline cursor-pointer"
+            onClick={() => setGpsNotice(null)} 
+            className="text-slate-400 hover:text-slate-700 font-bold p-1 cursor-pointer transition-colors"
+            title="Cerrar aviso"
           >
-            Entendido
+            ✕
           </button>
         </div>
       )}

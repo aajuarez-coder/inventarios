@@ -112,10 +112,10 @@ export const Header: React.FC<HeaderProps> = ({
             </svg>
           </div>
           <div>
-            <h1 className="font-syne text-[0.95rem] sm:text-base font-extrabold tracking-tight text-[#f8fafc] flex items-center gap-1.5 uppercase">
+            <h1 className="font-syne text-[0.95rem] sm:text-base font-extrabold tracking-tight text-white flex items-center gap-1.5 uppercase">
               INVENTARIOS <span className="text-[#ff8200] font-black">| GRUPO PETROIL</span>
             </h1>
-            <p className="label text-[9px] text-[rgba(248,250,252,0.5)] hidden sm:block">
+            <p className="label text-[9.5px] text-slate-300 font-semibold hidden sm:block">
               División TI • Mazatlán, Sin.
             </p>
           </div>
@@ -124,18 +124,18 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Search bar */}
         <div className="flex-1 max-w-[500px] mx-4 hidden md:block">
           <div className="relative">
-            <Search className="w-4 h-4 text-[rgba(248,250,252,0.4)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-300 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Buscar por placa, serie, colaborador, marca o modelo..."
               value={searchQuery}
               onChange={(e) => onSearch(e.target.value)}
-              className="w-full bg-[#0a0e14] hover:bg-[#0e141d] focus:bg-[#0a0e14] text-[0.875rem] font-medium tracking-tight pl-10 pr-8 py-2.5 rounded-[6px] border border-[rgba(248,250,252,0.18)] focus:border-[#ff8200] focus:ring-2 focus:ring-[#ff8200]/25 transition-all outline-hidden text-[#f8fafc] placeholder:text-[rgba(248,250,252,0.45)] placeholder:font-normal caret-[#ff8200]"
+              className="w-full bg-[#0a0e14] hover:bg-[#0e141d] focus:bg-[#0a0e14] text-[0.875rem] font-medium tracking-tight pl-10 pr-8 py-2.5 rounded-[6px] border border-[rgba(248,250,252,0.22)] focus:border-[#ff8200] focus:ring-2 focus:ring-[#ff8200]/25 transition-all outline-hidden text-white placeholder:text-slate-400 placeholder:font-medium caret-[#ff8200]"
             />
             {searchQuery && (
               <button 
                 onClick={() => onSearch('')} 
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[rgba(248,250,252,0.4)] hover:text-[#f8fafc]"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-300 hover:text-white"
               >
                 ✕
               </button>
@@ -149,14 +149,14 @@ export const Header: React.FC<HeaderProps> = ({
           <div 
             onClick={forceCloudSync}
             title={`Base de datos Google Cloud Firestore activa (ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e). Sincronización en tiempo real activa con producción. Última actualización: ${lastCloudSyncTime}. Haz clic para sincronizar.`}
-            className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-[6px] bg-[#131a26] border border-emerald-500/30 cursor-pointer hover:border-emerald-500/60 transition-all shadow-xs"
+            className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-[6px] bg-[#131a26] border border-emerald-500/40 cursor-pointer hover:border-emerald-400 transition-all shadow-xs"
           >
             <div className={`w-2 h-2 rounded-full ${isCloudSyncing ? 'bg-amber-400 animate-ping' : 'bg-[#10b981] animate-pulse'}`} />
             <div className="flex flex-col text-left">
               <span className="font-mono text-[10px] tracking-wider text-emerald-300 uppercase font-bold flex items-center gap-1.5">
                 {isCloudSyncing ? 'Sincronizando...' : 'Google Cloud Firestore'}
               </span>
-              <span className="font-mono text-[8px] text-[rgba(248,250,252,0.45)] uppercase leading-none">
+              <span className="font-mono text-[8.5px] text-emerald-200/90 uppercase leading-none font-semibold">
                 Producción en Tiempo Real
               </span>
             </div>

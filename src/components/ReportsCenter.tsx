@@ -419,14 +419,14 @@ export const ReportsCenter: React.FC = () => {
       </div>
 
       {/* Report Controls (Hidden in print) */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs no-print">
+      <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs no-print">
         <div className="flex flex-wrap items-center gap-3">
           <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Tipo de Reporte en Pantalla:</span>
+            <span className="text-slate-700 block text-[10.5px] uppercase font-bold mb-1">Tipo de Reporte en Pantalla:</span>
             <select
               value={reportType}
               onChange={(e) => setReportType(e.target.value as any)}
-              className="p-2 border border-slate-300 rounded-lg bg-white font-medium text-slate-800 outline-hidden"
+              className="p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-900 outline-hidden"
             >
               <option value="general">Reporte General de Inventario de Hardware</option>
               <option value="warehouse_stock">Reporte de Stock Disponible en Almacén</option>
@@ -438,11 +438,11 @@ export const ReportsCenter: React.FC = () => {
           </div>
 
           <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-bold mb-1">Filtrar por Sucursal:</span>
+            <span className="text-slate-700 block text-[10.5px] uppercase font-bold mb-1">Filtrar por Sucursal:</span>
             <select
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
-              className="p-2 border border-slate-300 rounded-lg bg-white text-slate-800 outline-hidden"
+              className="p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-900 outline-hidden"
             >
               <option value="all">Todas las Sedes</option>
               {branches.map(b => (
@@ -454,18 +454,18 @@ export const ReportsCenter: React.FC = () => {
 
         <div className="flex items-center gap-4 text-xs font-mono">
           <div className="text-right">
-            <span className="text-slate-400 text-[10px] block">
+            <span className="text-slate-700 text-[10.5px] font-bold block">
               {reportType === 'maintenance' ? 'Servicios Registrados:' : 'Equipos en Reporte:'}
             </span>
-            <strong className="text-slate-900 text-sm">
+            <strong className="text-slate-900 text-sm font-extrabold">
               {reportType === 'maintenance' ? filteredMaintenance.length : filteredAssets.length}
             </strong>
           </div>
           <div className="text-right">
-            <span className="text-slate-400 text-[10px] block">
+            <span className="text-slate-700 text-[10.5px] font-bold block">
               {reportType === 'maintenance' ? 'Costo Servicios:' : 'Valoración Total:'}
             </span>
-            <strong className="text-rose-900 text-sm">
+            <strong className="text-rose-900 text-sm font-extrabold">
               {formatCurrency(reportType === 'maintenance' ? totalMaintenanceCost : totalValuation)}
             </strong>
           </div>

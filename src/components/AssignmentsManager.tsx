@@ -372,48 +372,48 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
                         {asset ? (
                           <div>
                             <p className="font-semibold text-slate-900">{asset.brand} {asset.model}</p>
-                            <p className="text-[11px] font-mono text-slate-500">
-                              TAG: <strong>{asset.assetTag}</strong> • S/N: {asset.serialNumber}
+                            <p className="text-[11.5px] font-mono text-slate-700 font-medium">
+                              TAG: <strong className="text-[#004a99]">{asset.assetTag}</strong> • S/N: <strong className="text-slate-800">{asset.serialNumber}</strong>
                             </p>
                           </div>
                         ) : (
-                          <span className="text-slate-400">Activo retirado</span>
+                          <span className="text-slate-600 font-semibold">Activo retirado</span>
                         )}
                       </td>
 
                       <td className="py-3 px-4">
                         {emp ? (
                           <div>
-                            <p className="font-semibold text-slate-900">{emp.fullName}</p>
-                            <p className="text-[11px] text-slate-500">{emp.position} ({emp.department})</p>
+                            <p className="font-bold text-slate-900">{emp.fullName}</p>
+                            <p className="text-[11.5px] text-slate-700 font-medium">{emp.position} ({emp.department})</p>
                           </div>
                         ) : (
-                          <span className="text-slate-400">Colaborador no encontrado</span>
+                          <span className="text-slate-600 font-semibold">Colaborador no encontrado</span>
                         )}
                       </td>
 
-                      <td className="py-3 px-4 font-mono text-slate-600 whitespace-nowrap">
+                      <td className="py-3 px-4 font-mono text-slate-800 font-semibold whitespace-nowrap">
                         {formatDate(asg.assignedDate)}
                       </td>
 
                       <td className="py-3 px-4 whitespace-nowrap">
                         {isSigned ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Firmada
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" /> Firmada
                           </span>
                         ) : (
                           <button
                             onClick={() => setSigningAssignment(asg)}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-400 px-2.5 py-0.5 rounded-full transition-colors cursor-pointer"
                           >
-                            <PenTool className="w-3 h-3 text-amber-600" /> Firmar Ahora
+                            <PenTool className="w-3.5 h-3.5 text-amber-700" /> Firmar Ahora
                           </button>
                         )}
                       </td>
 
                       <td className="py-3 px-4 whitespace-nowrap">
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase ${
-                          asg.status === 'activa' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-slate-100 text-slate-600'
+                        <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                          asg.status === 'activa' ? 'bg-blue-100 text-blue-900 border border-blue-300' : 'bg-slate-200 text-slate-800'
                         }`}>
                           {asg.status === 'activa' ? 'Vigente' : 'Devuelta'}
                         </span>

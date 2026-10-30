@@ -164,22 +164,22 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 {/* Current assignment */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-start gap-3">
+                <div className="p-4 rounded-xl border border-slate-300 bg-slate-50 flex items-start gap-3">
                   <div className="p-2.5 rounded-lg bg-blue-100 text-blue-700">
                     <User className="w-5 h-5" />
                   </div>
                   <div className="flex-1 text-xs">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    <span className="text-[10.5px] uppercase font-bold text-slate-700 tracking-wider">
                       Custodia y Asignación
                     </span>
                     {employee ? (
                       <div className="mt-1">
                         <p className="font-bold text-sm text-slate-900">{employee.fullName}</p>
-                        <p className="text-slate-600">{employee.position} • {employee.department}</p>
-                        <p className="text-slate-500 font-mono text-[11px] mt-0.5">{employee.email}</p>
+                        <p className="text-slate-800 font-medium">{employee.position} • {employee.department}</p>
+                        <p className="text-slate-700 font-mono text-[11.5px] font-semibold mt-0.5">{employee.email}</p>
                         {currentAssignment && (
                           <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono text-[10px]">
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-mono text-[10.5px] font-bold">
                               <FileText className="w-3 h-3" />
                               Folio Responsiva: {currentAssignment.folioResponsiva}
                             </div>
@@ -191,7 +191,7 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                                 setReturnNotes('');
                                 setShowReturnModal(true);
                               }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 font-medium text-[10px] cursor-pointer transition-colors"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-semibold text-[10.5px] cursor-pointer transition-colors"
                               title="Devolver este equipo al almacén"
                             >
                               <RotateCcw className="w-3 h-3 text-amber-600" />
@@ -203,24 +203,24 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                     ) : (
                       <div className="mt-1">
                         <p className="font-bold text-slate-900">Disponible en Almacén TI</p>
-                        <p className="text-slate-500">Sin colaborador asignado en este momento.</p>
+                        <p className="text-slate-700 font-medium">Sin colaborador asignado en este momento.</p>
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* Location & Physical Condition */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-start gap-3">
+                <div className="p-4 rounded-xl border border-slate-300 bg-slate-50 flex items-start gap-3">
                   <div className="p-2.5 rounded-lg bg-indigo-100 text-indigo-700">
                     <Building2 className="w-5 h-5" />
                   </div>
                   <div className="flex-1 text-xs">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    <span className="text-[10.5px] uppercase font-bold text-slate-700 tracking-wider">
                       Ubicación & Estado Físico
                     </span>
                     <p className="font-bold text-sm text-slate-900 mt-1">{branch?.name || 'Sede no especificada'}</p>
-                    <p className="text-slate-600">{asset.locationDetails || branch?.city}</p>
-                    <p className={`font-semibold mt-1.5 ${condition.color}`}>
+                    <p className="text-slate-800 font-medium">{asset.locationDetails || branch?.city}</p>
+                    <p className={`font-bold mt-1.5 ${condition.color}`}>
                       Condición: {condition.label}
                     </p>
                   </div>

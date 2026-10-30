@@ -612,19 +612,19 @@ export const UserManual: React.FC<UserManualProps> = ({ onNavigate }) => {
   return (
     <div className="space-y-6 pb-12">
       {/* Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-300 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#004a99] bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full">
               Documentación Oficial v2.4.1 LTS
             </span>
-            <span className="text-slate-300">·</span>
-            <span className="text-xs text-slate-500">Grupo Petroil TI</span>
+            <span className="text-slate-400 font-bold">·</span>
+            <span className="text-xs text-slate-700 font-bold">Grupo Petroil TI</span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Manual de Usuario y Operación
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <p className="text-sm text-slate-700 font-medium mt-0.5">
             Guía integral de procedimientos, instalación de agente, cartas responsivas, trazabilidad y resolución de errores.
           </p>
         </div>
@@ -633,16 +633,16 @@ export const UserManual: React.FC<UserManualProps> = ({ onNavigate }) => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleDownloadMarkdown}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors cursor-pointer"
             title="Descargar archivo Markdown completo"
           >
-            <Download className="w-3.5 h-3.5 text-slate-600" />
+            <Download className="w-3.5 h-3.5 text-slate-700" />
             <span>Descargar .md</span>
           </button>
 
           <button
             onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#004a99] hover:bg-[#005bbd] rounded-xl shadow-xs transition-colors cursor-pointer"
             title="Imprimir o guardar como PDF"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -654,21 +654,21 @@ export const UserManual: React.FC<UserManualProps> = ({ onNavigate }) => {
       {/* Interactive Two-Column Reader */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Table of Contents / Search */}
-        <div className="lg:col-span-4 bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-4 lg:sticky lg:top-4">
+        <div className="lg:col-span-4 bg-white border border-slate-300 rounded-2xl p-4 shadow-xs space-y-4 lg:sticky lg:top-4">
           {/* Search Bar */}
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-600 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar tema, error, Windows 11, código..."
-              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#004a99]/20 focus:border-[#004a99] font-semibold text-slate-900 placeholder:text-slate-500 transition-all"
             />
             {searchQuery && (
               <button 
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-600 hover:text-slate-900"
               >
                 ✕
               </button>
@@ -676,7 +676,7 @@ export const UserManual: React.FC<UserManualProps> = ({ onNavigate }) => {
           </div>
 
           <div className="space-y-1 max-h-[600px] overflow-y-auto pr-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 block mb-1">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-700 px-2 block mb-1">
               Capítulos del Manual ({filteredSections.length})
             </span>
             {filteredSections.map((sec) => {

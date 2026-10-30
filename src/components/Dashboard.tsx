@@ -185,9 +185,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onOpenAssetDet
             </button>
           </div>
 
-          <div className="divide-y divide-[rgba(248,250,252,0.08)]">
+          <div className="divide-y divide-[rgba(248,250,252,0.12)]">
             {maintenanceUrgent.length === 0 ? (
-              <p className="py-6 text-center text-xs text-[rgba(248,250,252,0.4)] font-mono">
+              <p className="py-6 text-center text-xs text-slate-300 font-mono font-medium">
                 No hay mantenimientos vencidos ni pendientes inmediatos.
               </p>
             ) : (
@@ -199,18 +199,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onOpenAssetDet
                   <div 
                     key={asset.id} 
                     onClick={() => onOpenAssetDetail(asset.id)}
-                    className="list-item hover:bg-[rgba(248,250,252,0.03)] cursor-pointer px-1 transition-colors"
+                    className="list-item hover:bg-[rgba(248,250,252,0.06)] cursor-pointer px-1.5 transition-colors"
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="mono text-xs font-bold text-[#f8fafc]">{asset.assetTag}</span>
-                        <span className="text-xs text-[rgba(248,250,252,0.7)]">{asset.brand} {asset.model}</span>
+                        <span className="mono text-xs font-bold text-white">{asset.assetTag}</span>
+                        <span className="text-xs text-slate-200 font-medium">{asset.brand} {asset.model}</span>
                       </div>
-                      <p className="mono text-[10px] text-[rgba(248,250,252,0.4)] mt-0.5">
-                        Custodio: <span className="text-[rgba(248,250,252,0.8)]">{emp?.fullName || 'Stock Almacén'}</span> • Programado: {formatDate(asset.nextMaintenanceDate)}
+                      <p className="mono text-[10.5px] text-slate-300 mt-0.5">
+                        Custodio: <span className="text-white font-semibold">{emp?.fullName || 'Stock Almacén'}</span> • Programado: <span className="text-slate-200">{formatDate(asset.nextMaintenanceDate)}</span>
                       </p>
                     </div>
-                    <span className={isLate ? 'badge badge-red' : 'badge badge-amber'}>
+                    <span className={isLate ? 'badge badge-red font-bold' : 'badge badge-amber font-bold'}>
                       {maint.label}
                     </span>
                   </div>
@@ -237,9 +237,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onOpenAssetDet
             </button>
           </div>
 
-          <div className="divide-y divide-[rgba(248,250,252,0.08)]">
+          <div className="divide-y divide-[rgba(248,250,252,0.12)]">
             {warrantyUrgent.length === 0 ? (
-              <p className="py-6 text-center text-xs text-[rgba(248,250,252,0.4)] font-mono">
+              <p className="py-6 text-center text-xs text-slate-300 font-mono font-medium">
                 Todas las pólizas de garantía cuentan con vigencia activa.
               </p>
             ) : (
@@ -250,18 +250,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onOpenAssetDet
                   <div 
                     key={asset.id} 
                     onClick={() => onOpenAssetDetail(asset.id)}
-                    className="list-item hover:bg-[rgba(248,250,252,0.03)] cursor-pointer px-1 transition-colors"
+                    className="list-item hover:bg-[rgba(248,250,252,0.06)] cursor-pointer px-1.5 transition-colors"
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="mono text-xs font-bold text-[#f8fafc]">{asset.assetTag}</span>
-                        <span className="text-xs text-[rgba(248,250,252,0.7)]">{asset.name}</span>
+                        <span className="mono text-xs font-bold text-white">{asset.assetTag}</span>
+                        <span className="text-xs text-slate-200 font-medium">{asset.name}</span>
                       </div>
-                      <p className="mono text-[10px] text-[rgba(248,250,252,0.4)] mt-0.5">
-                        Proveedor: {asset.supplier} • Factura: {asset.invoiceNumber || 'S/N'}
+                      <p className="mono text-[10.5px] text-slate-300 mt-0.5">
+                        Proveedor: <span className="text-white font-medium">{asset.supplier}</span> • Factura: <span className="text-slate-200">{asset.invoiceNumber || 'S/N'}</span>
                       </p>
                     </div>
-                    <span className={isExpired ? 'badge badge-red' : 'badge badge-amber'}>
+                    <span className={isExpired ? 'badge badge-red font-bold' : 'badge badge-amber font-bold'}>
                       {war.label}
                     </span>
                   </div>
@@ -285,7 +285,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onOpenAssetDet
                 Equipos por Categoría
               </h3>
             </div>
-            <span className="mono text-xs text-[rgba(248,250,252,0.5)]">{totalAssets} TOTAL</span>
+            <span className="mono text-xs text-slate-200 font-semibold">{totalAssets} TOTAL</span>
           </div>
 
           <div className="space-y-3.5">
@@ -300,11 +300,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onOpenAssetDet
               const pct = totalAssets > 0 ? Math.round((item.count / totalAssets) * 100) : 0;
               return (
                 <div key={item.cat} className="space-y-1">
-                  <div className="flex justify-between text-xs text-[#f8fafc]">
-                    <span className="font-medium text-[rgba(248,250,252,0.85)]">{item.label}</span>
-                    <span className="mono text-[11px] text-[rgba(248,250,252,0.5)]">{item.count} ({pct}%)</span>
+                  <div className="flex justify-between text-xs text-white">
+                    <span className="font-semibold text-slate-100">{item.label}</span>
+                    <span className="mono text-[11px] text-slate-200 font-bold">{item.count} ({pct}%)</span>
                   </div>
-                  <div className="w-full bg-[#0a0e14] h-1.5 rounded-[3px] overflow-hidden border border-[rgba(248,250,252,0.08)]">
+                  <div className="w-full bg-[#0a0e14] h-1.5 rounded-[3px] overflow-hidden border border-[rgba(248,250,252,0.12)]">
                     <div 
                       className={`h-full ${item.color} transition-all duration-500`}
                       style={{ width: `${pct}%` }}
@@ -328,7 +328,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onOpenAssetDet
             <div className="flex items-center gap-2">
               <button 
                 onClick={() => onNavigate('geolocation')}
-                className="label text-[#10b981] hover:underline flex items-center gap-1 cursor-pointer"
+                className="label text-[#10b981] hover:underline flex items-center gap-1 cursor-pointer font-bold"
               >
                 <MapPin className="w-3 h-3" />
                 MAPA
@@ -342,16 +342,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onOpenAssetDet
               return (
                 <div 
                   key={branch.id} 
-                  className="p-2.5 rounded-[6px] bg-[#0a0e14] border border-[rgba(248,250,252,0.08)] hover:border-[rgba(248,250,252,0.2)] transition-colors"
+                  className="p-2.5 rounded-[6px] bg-[#0a0e14] border border-[rgba(248,250,252,0.12)] hover:border-[rgba(248,250,252,0.25)] transition-colors"
                 >
                   <div className="flex items-center justify-between text-xs">
                     <div>
-                      <p className="font-semibold text-[#f8fafc]">{branch.name}</p>
-                      <p className="mono text-[10px] text-[rgba(248,250,252,0.4)]">{branch.city}, {branch.state}</p>
+                      <p className="font-bold text-white">{branch.name}</p>
+                      <p className="mono text-[10.5px] text-slate-300 font-medium">{branch.city}, {branch.state}</p>
                     </div>
                     <div className="text-right">
-                      <span className="mono font-bold text-[#f8fafc] text-sm">{count}</span>
-                      <span className="label text-[8px] block">EQUIPOS</span>
+                      <span className="mono font-bold text-white text-sm">{count}</span>
+                      <span className="label text-[8.5px] block font-bold text-slate-300">EQUIPOS</span>
                     </div>
                   </div>
                   <div className="w-full bg-[#131a26] h-1.5 rounded-[2px] mt-2 overflow-hidden">

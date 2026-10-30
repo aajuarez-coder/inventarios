@@ -578,31 +578,31 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
       </div>
 
       {/* Assets Count indicator */}
-      <div className="flex items-center justify-between text-xs text-slate-500 px-1">
-        <span>Mostrando <strong>{filteredAssets.length}</strong> de <strong>{assets.length}</strong> equipos registrados</span>
+      <div className="flex items-center justify-between text-xs text-slate-700 font-medium px-1">
+        <span>Mostrando <strong className="text-slate-900">{filteredAssets.length}</strong> de <strong className="text-slate-900">{assets.length}</strong> equipos registrados</span>
       </div>
 
       {/* Render Table or Grid */}
       {viewMode === 'table' ? (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-300 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
-                  <th className="py-3 px-4">Placa / Tag</th>
-                  <th className="py-3 px-4">Equipo / Hardware</th>
-                  <th className="py-3 px-4">Serie (S/N)</th>
-                  <th className="py-3 px-4">Estado</th>
-                  <th className="py-3 px-4">Ubicación / Colaborador</th>
-                  <th className="py-3 px-4">Garantía</th>
-                  <th className="py-3 px-4">Mantenimiento</th>
-                  <th className="py-3 px-4 text-right">Acciones</th>
+                <tr className="bg-slate-100 border-b border-slate-200 text-slate-900 font-bold uppercase tracking-wider text-[11px]">
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Placa / Tag</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Equipo / Hardware</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Serie (S/N)</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Estado</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Ubicación / Colaborador</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Garantía</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Mantenimiento</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900 text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-200">
                 {filteredAssets.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-400">
+                    <td colSpan={8} className="py-12 text-center text-slate-600 font-medium text-sm">
                       No se encontraron equipos con los criterios de búsqueda aplicados.
                     </td>
                   </tr>
@@ -617,33 +617,33 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                     return (
                       <tr 
                         key={asset.id} 
-                        className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                        className="hover:bg-slate-50 transition-colors cursor-pointer group"
                         onClick={() => setDetailAsset(asset)}
                       >
                         <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             {getCategoryIcon(asset.category)}
-                            <span className="text-indigo-600">{asset.assetTag}</span>
+                            <span className="text-[#004a99] font-black">{asset.assetTag}</span>
                           </div>
                         </td>
 
                         <td className="py-3 px-4">
                           <div>
-                            <p className="font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                            <p className="font-bold text-slate-900 group-hover:text-[#004a99] transition-colors">
                               {asset.brand} {asset.model}
                             </p>
-                            <p className="text-[11px] text-slate-500 truncate max-w-xs">
+                            <p className="text-[11.5px] text-slate-700 font-medium truncate max-w-xs">
                               {asset.specs.cpu || asset.specs.storage} • {asset.specs.ram}
                             </p>
                           </div>
                         </td>
 
-                        <td className="py-3 px-4 font-mono text-slate-600 whitespace-nowrap">
+                        <td className="py-3 px-4 font-mono font-semibold text-slate-800 whitespace-nowrap">
                           {asset.serialNumber}
                         </td>
 
                         <td className="py-3 px-4 whitespace-nowrap">
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusBadge.className}`}>
+                          <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full border ${statusBadge.className}`}>
                             {statusBadge.label}
                           </span>
                         </td>
@@ -651,8 +651,8 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                         <td className="py-3 px-4">
                           {emp ? (
                             <div>
-                              <p className="font-medium text-slate-800">{emp.fullName}</p>
-                              <p className="text-[10px] text-slate-500">{emp.department} • {br?.city}</p>
+                              <p className="font-bold text-slate-900">{emp.fullName}</p>
+                              <p className="text-[11px] text-slate-700 font-medium">{emp.department} • {br?.city}</p>
                             </div>
                           ) : (
                             <div>
@@ -797,35 +797,35 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                     <h3 className="font-bold text-sm text-slate-900 leading-snug">
                       {asset.brand} {asset.model}
                     </h3>
-                    <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                    <p className="text-[11.5px] text-slate-700 font-mono font-medium mt-0.5">
                       S/N: {asset.serialNumber}
                     </p>
                   </div>
 
-                  <div className="mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 text-[11px] space-y-1 text-slate-600">
-                    <p className="truncate"><strong>CPU:</strong> {asset.specs.cpu || 'N/A'}</p>
-                    <p><strong>RAM / Disco:</strong> {asset.specs.ram} • {asset.specs.storage}</p>
-                    <p className="truncate"><strong>Ubicación:</strong> {br?.name}</p>
+                  <div className="mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[11.5px] space-y-1 text-slate-800">
+                    <p className="truncate"><strong className="text-slate-900">CPU:</strong> {asset.specs.cpu || 'N/A'}</p>
+                    <p><strong className="text-slate-900">RAM / Disco:</strong> {asset.specs.ram} • {asset.specs.storage}</p>
+                    <p className="truncate"><strong className="text-slate-900">Ubicación:</strong> {br?.name}</p>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500">Garantía:</span>
-                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${warranty.badgeClass}`}>
+                  <div className="mt-3 flex items-center justify-between text-[11.5px]">
+                    <span className="text-slate-700 font-semibold">Garantía:</span>
+                    <span className={`px-2 py-0.5 rounded border text-[10.5px] font-bold ${warranty.badgeClass}`}>
                       {warranty.label}
                     </span>
                   </div>
 
-                  <div className="mt-1 flex items-center justify-between text-[11px]">
-                    <span className="text-slate-500">Mantenimiento:</span>
-                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${maintenance.badgeClass}`}>
+                  <div className="mt-1 flex items-center justify-between text-[11.5px]">
+                    <span className="text-slate-700 font-semibold">Mantenimiento:</span>
+                    <span className={`px-2 py-0.5 rounded border text-[10.5px] font-bold ${maintenance.badgeClass}`}>
                       {maintenance.label}
                     </span>
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <span className="text-slate-500 truncate max-w-[130px]">
-                    {emp ? emp.fullName : 'Disponible'}
+                <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
+                  <span className="text-slate-800 font-semibold truncate max-w-[140px]">
+                    {emp ? emp.fullName : 'Disponible en Almacén'}
                   </span>
                     <div className="flex items-center gap-1.5">
                     {asset.status === 'asignado' && (

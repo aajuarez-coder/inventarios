@@ -633,6 +633,56 @@ app.post('/api/v1/agent/commands/:commandId/simulate-exec', (req, res) => {
   });
 });
 
+// Geolocation lookup endpoint (Network IP and Corporate Headquarters fallback)
+app.get('/api/geolocation/lookup', async (req, res) => {
+  try {
+    const forwarded = req.headers['x-forwarded-for'];
+    const clientIp = typeof forwarded === 'string' 
+      ? forwarded.split(',')[0].trim() 
+      : (req.socket.remoteAddress || '');
+
+    const isLocal = !clientIp || clientIp === '::1' || clientIp.startsWith('127.') || clientIp.startsWith('10.') || clientIp.startsWith('192.168.');
+    if (!isLocal) {
+      try {
+        const fetchRes = await fetch(`https://ipapi.co/${clientIp}/json/`, {
+          signal: AbortSignal.timeout(3000)
+        });
+        if (fetchRes.ok) {
+          const data = await fetchRes.json();
+          if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+            return res.json({
+              success: true,
+              method: 'ip',
+              lat: data.latitude,
+              lng: data.longitude,
+              city: data.city || 'Ciudad de México',
+              state: data.region || 'CDMX',
+              country: data.country_name || 'México',
+              org: data.org || 'Red Corporativa'
+            });
+          }
+        }
+      } catch {
+        // Fall through to corporate default
+      }
+    }
+  } catch (err) {
+    console.warn('Geolocation lookup notice:', err);
+  }
+
+  // Corporate Default: Matriz Mazatlán, Sinaloa (Grupo Petroil Headquarters)
+  return res.json({
+    success: true,
+    method: 'corporate_headquarters',
+    lat: 23.2393,
+    lng: -106.4212,
+    city: 'Mazatlán',
+    state: 'Sinaloa',
+    country: 'México',
+    locationName: 'Matriz Corporativa Grupo Petroil'
+  });
+});
+
 // Mount Vite or static files
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';

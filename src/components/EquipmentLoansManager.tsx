@@ -459,28 +459,28 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-bold text-[10px] tracking-wider">
+              <thead className="bg-slate-100 border-b border-slate-200 text-slate-900 uppercase font-bold text-[10.5px] tracking-wider">
                 <tr>
-                  <th className="py-3.5 px-4">Folio & Activo</th>
-                  <th className="py-3.5 px-4">Colaborador Solicitante</th>
-                  <th className="py-3.5 px-4">Motivo / Destino</th>
-                  <th className="py-3.5 px-4">Período de Salida</th>
-                  <th className="py-3.5 px-4">Estado & Semáforo</th>
-                  <th className="py-3.5 px-4 text-right">Acciones</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Folio & Activo</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Colaborador Solicitante</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Motivo / Destino</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Período de Salida</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900">Estado & Semáforo</th>
+                  <th className="py-3.5 px-4 font-bold text-slate-900 text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
+              <tbody className="divide-y divide-slate-200 text-slate-800">
                 {filteredLoans.map((loan) => {
                   const asset = assets.find(a => a.id === loan.assetId);
                   const emp = employees.find(e => e.id === loan.employeeId);
                   const timing = getLoanTiming(loan.expectedReturnDate, loan.actualReturnDate, loan.status);
 
                   return (
-                    <tr key={loan.id} className="hover:bg-slate-50/70 transition-colors group">
+                    <tr key={loan.id} className="hover:bg-slate-50 transition-colors group">
                       {/* Folio & Asset */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2.5">
-                          <div className="p-2 rounded-xl bg-slate-100 text-slate-700 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                          <div className="p-2 rounded-xl bg-slate-100 text-slate-700 group-hover:bg-blue-50 group-hover:text-[#004a99] transition-colors">
                             <Laptop className="w-4 h-4" />
                           </div>
                           <div>
@@ -488,11 +488,11 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
                               <span className="font-mono font-bold text-slate-900 text-xs">
                                 {loan.folio}
                               </span>
-                              <span className="font-mono text-[11px] text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded font-semibold">
+                              <span className="font-mono text-[11px] text-[#004a99] bg-blue-50 px-1.5 py-0.2 rounded font-bold border border-blue-200">
                                 {asset?.assetTag || 'EQ-DESCONOCIDO'}
                               </span>
                             </div>
-                            <span className="text-[11px] text-slate-500 truncate block max-w-[180px]">
+                            <span className="text-[11.5px] text-slate-700 font-medium truncate block max-w-[180px]">
                               {asset ? `${asset.brand} ${asset.model}` : 'Equipo de préstamo'}
                             </span>
                           </div>
@@ -502,22 +502,22 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
                       {/* Employee */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[11px] text-slate-700 shrink-0">
+                          <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[11px] text-slate-800 shrink-0">
                             {emp?.fullName ? emp.fullName.charAt(0) : 'U'}
                           </div>
                           <div>
-                            <div className="font-semibold text-slate-800">{emp?.fullName || 'Personal'}</div>
-                            <div className="text-[10px] text-slate-400">{emp?.department || 'Área'}</div>
+                            <div className="font-bold text-slate-900">{emp?.fullName || 'Personal'}</div>
+                            <div className="text-[10.5px] text-slate-700 font-medium">{emp?.department || 'Área'}</div>
                           </div>
                         </div>
                       </td>
 
                       {/* Purpose */}
                       <td className="py-3.5 px-4 max-w-xs">
-                        <span className="font-medium text-slate-800 block truncate" title={loan.purposeDescription}>
+                        <span className="font-semibold text-slate-900 block truncate" title={loan.purposeDescription}>
                           {loan.purposeDescription}
                         </span>
-                        <span className="text-[10px] text-slate-400 capitalize">
+                        <span className="text-[10.5px] text-slate-700 font-medium capitalize">
                           {loan.purpose.replace('_', ' ')}
                         </span>
                       </td>
