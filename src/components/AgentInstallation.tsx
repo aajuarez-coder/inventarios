@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useInventory } from '../context/InventoryContext';
+import { useInventory, safeLocalStorageSetItem } from '../context/InventoryContext';
 import { HardwareAsset, AssetCategory, BitLockerStatus } from '../types/inventory';
 import { 
   Terminal, 
@@ -282,7 +282,7 @@ export const AgentInstallation: React.FC<AgentInstallationProps> = ({
         }
         return a;
       });
-      localStorage.setItem(STORAGE_KEY_AGENTS, JSON.stringify(updated));
+      safeLocalStorageSetItem(STORAGE_KEY_AGENTS, JSON.stringify(updated));
       return updated;
     });
 
@@ -376,7 +376,7 @@ export const AgentInstallation: React.FC<AgentInstallationProps> = ({
                 });
 
                 const result = Array.from(mergedMap.values());
-                localStorage.setItem(STORAGE_KEY_AGENTS, JSON.stringify(result));
+                safeLocalStorageSetItem(STORAGE_KEY_AGENTS, JSON.stringify(result));
                 return result;
               });
             }
@@ -1308,7 +1308,7 @@ try {
         employeeName: assignedEmployee?.fullName || a.employeeName,
         employeeEmail: assignedEmployee?.email || a.employeeEmail
       } : a);
-      localStorage.setItem(STORAGE_KEY_AGENTS, JSON.stringify(updated));
+      safeLocalStorageSetItem(STORAGE_KEY_AGENTS, JSON.stringify(updated));
       return updated;
     });
 
@@ -1398,7 +1398,7 @@ try {
       setConnectedAgents(prev => {
         const filtered = prev.filter(a => a.id !== newAgent.id && a.specs.serialNumber !== serial);
         const updated = [newAgent, ...filtered];
-        localStorage.setItem(STORAGE_KEY_AGENTS, JSON.stringify(updated));
+        safeLocalStorageSetItem(STORAGE_KEY_AGENTS, JSON.stringify(updated));
         return updated;
       });
 

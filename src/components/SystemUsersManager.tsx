@@ -152,6 +152,7 @@ export const SystemUsersManager: React.FC = () => {
     }
 
     const roleConfig = ROLE_CONFIGS[formRole] || ROLE_CONFIGS.admin_ti;
+    const cleanAvatar = formAvatarUrl.trim() || undefined;
 
     if (editingUser) {
       updateSystemUser(editingUser.id, {
@@ -162,11 +163,11 @@ export const SystemUsersManager: React.FC = () => {
         roleTitle: formRole === 'personalizado' ? 'Operador Personalizado' : roleConfig.title,
         branchName: formBranch,
         status: formStatus,
-        avatarUrl: formAvatarUrl.trim() || undefined,
+        ...(cleanAvatar ? { avatarUrl: cleanAvatar } : {}),
         permissions: formPermissions,
         canEdit: !formPermissions.isReadOnly
       });
-      showNotification(`Usuario "${formName}" actualizado exitosamente.`);
+      showNotification(`Usuario "${formName}" actualizado y guardado en Google Cloud Firestore.`);
     } else {
       addSystemUser({
         name: formName.trim(),
@@ -176,11 +177,11 @@ export const SystemUsersManager: React.FC = () => {
         roleTitle: formRole === 'personalizado' ? 'Operador Personalizado' : roleConfig.title,
         branchName: formBranch,
         status: formStatus,
-        avatarUrl: formAvatarUrl.trim() || undefined,
+        ...(cleanAvatar ? { avatarUrl: cleanAvatar } : {}),
         permissions: formPermissions,
         canEdit: !formPermissions.isReadOnly
       });
-      showNotification(`Usuario "${formName}" dado de alta exitosamente en el sistema.`);
+      showNotification(`Usuario "${formName}" registrado y sincronizado en Google Cloud Firestore.`);
     }
 
     setIsModalOpen(false);

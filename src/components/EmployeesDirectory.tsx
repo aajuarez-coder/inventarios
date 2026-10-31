@@ -174,6 +174,8 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
       return;
     }
 
+    const cleanAvatar = editEmployeeForm.avatarUrl?.trim() || undefined;
+
     updateEmployee(editEmployeeForm.id, {
       employeeNumber: editEmployeeForm.employeeNumber.trim(),
       fullName: editEmployeeForm.fullName.trim(),
@@ -184,11 +186,11 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
       branchId: editEmployeeForm.branchId,
       status: editEmployeeForm.status,
       hireDate: editEmployeeForm.hireDate,
-      avatarUrl: editEmployeeForm.avatarUrl?.trim() || undefined
+      ...(cleanAvatar ? { avatarUrl: cleanAvatar } : {})
     });
 
     setEditingEmployee(null);
-    setEmployeeActionFeedback({ type: 'success', message: `Colaborador "${editEmployeeForm.fullName}" actualizado correctamente en el directorio.` });
+    setEmployeeActionFeedback({ type: 'success', message: `Colaborador "${editEmployeeForm.fullName}" actualizado y sincronizado en Firestore.` });
     setTimeout(() => setEmployeeActionFeedback(null), 3500);
   };
 

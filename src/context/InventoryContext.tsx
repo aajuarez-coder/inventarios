@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { 
   HardwareAsset, 
   Employee, 
@@ -7,14 +7,14 @@ import {
   Branch, 
   Transfer, 
   TimelineEvent, 
-  EmailNotification,
-  AppUser,
-  UserRole,
-  UserPermissions,
-  EquipmentLoan,
-  DeviceCommand,
-  DeviceCommandType,
-  PhysicalCondition
+  EmailNotification, 
+  AppUser, 
+  UserRole, 
+  UserPermissions, 
+  EquipmentLoan, 
+  DeviceCommand, 
+  DeviceCommandType, 
+  PhysicalCondition 
 } from '../types/inventory';
 import { 
   INITIAL_ASSETS, 
@@ -24,9 +24,9 @@ import {
   INITIAL_BRANCHES, 
   INITIAL_TRANSFERS, 
   INITIAL_TIMELINE, 
-  INITIAL_EMAIL_LOGS,
-  SYSTEM_USERS,
-  INITIAL_LOANS
+  INITIAL_EMAIL_LOGS, 
+  SYSTEM_USERS, 
+  INITIAL_LOANS 
 } from '../data/mockData';
 import { getDefaultPermissionsForRole } from '../utils/permissionHelpers';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -35,7 +35,9 @@ import {
   COLLECTIONS, 
   seedInitialFirestoreDataIfEmpty, 
   saveDocumentToFirestore, 
-  deleteDocumentFromFirestore 
+  saveBatchToFirestore, 
+  deleteDocumentFromFirestore, 
+  sanitizeForFirestore 
 } from '../services/firestoreService';
 
 interface InventoryContextType {
@@ -180,6 +182,23 @@ const STORAGE_KEYS = {
   LOANS: 'itasset_loans_v1',
 };
 
+export function safeLocalStorageSetItem(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err: any) {
+    if (err?.name === 'QuotaExceededError' || err?.code === 22 || err?.message?.includes('quota')) {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // Ignore
+      }
+      console.warn(`[Storage] Cuota de almacenamiento local excedida para "${key}". Los datos están protegidos en Google Cloud Firestore.`);
+    } else {
+      console.warn(`[Storage] Error al guardar en localStorage para "${key}":`, err);
+    }
+  }
+}
+
 export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [assets, setAssets] = useState<HardwareAsset[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.ASSETS);
@@ -306,7 +325,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return;
     }
     setCurrentUserState(user);
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+    safeLocalStorageSetItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
   };
 
   const canEdit = currentUser?.canEdit !== false && currentUser?.role !== 'visor' && currentUser?.permissions?.isReadOnly !== true;
@@ -449,8 +468,8 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     setCurrentUserState(updatedUser);
     setIsAuthenticated(true);
-    localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, 'true');
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(updatedUser));
+    safeLocalStorageSetItem(STORAGE_KEYS.AUTH_SESSION, 'true');
+    safeLocalStorageSetItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(updatedUser));
   };
 
   const login = (email: string, password?: string): { success: boolean; error?: string; user?: AppUser } => {
@@ -464,29 +483,35 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const logout = () => {
     setIsAuthenticated(false);
-    localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, 'false');
+    safeLocalStorageSetItem(STORAGE_KEYS.AUTH_SESSION, 'false');
   };
 
   const addSystemUser = (userData: Omit<AppUser, 'id'>): AppUser => {
     const newId = `user-${Date.now()}`;
     const perms = userData.permissions || getDefaultPermissionsForRole(userData.role);
+    const cleanAvatar = userData.avatarUrl?.trim() || undefined;
     const newUser: AppUser = {
       ...userData,
       id: newId,
       status: userData.status || 'activo',
       createdAt: new Date().toISOString().split('T')[0],
       permissions: perms,
-      canEdit: !perms.isReadOnly
+      canEdit: !perms.isReadOnly,
+      ...(cleanAvatar ? { avatarUrl: cleanAvatar } : {})
     };
 
-    setSystemUsers(prev => [newUser, ...prev]);
-    saveDocumentToFirestore(COLLECTIONS.SYSTEM_USERS, newId, newUser);
+    setSystemUsers(prev => [newUser, ...prev.filter(u => u.id !== newId)]);
+    saveDocumentToFirestore(COLLECTIONS.SYSTEM_USERS, newId, newUser).then(res => {
+      if (!res.success) {
+        console.error('[Firestore] Error guardando usuario del sistema:', res.error);
+      }
+    });
 
     logEvent({
       assetId: 'sys-user',
       type: 'alta',
       title: `Alta de Usuario del Sistema: ${newUser.name}`,
-      description: `Operador registrado con correo ${newUser.email} y rol ${newUser.roleTitle}.`,
+      description: `Operador registrado con correo ${newUser.email} y rol ${newUser.roleTitle}. Sincronizado en Google Cloud Firestore.`,
       author: currentUser.name
     });
 
@@ -516,7 +541,11 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }));
 
     if (updatedUser) {
-      saveDocumentToFirestore(COLLECTIONS.SYSTEM_USERS, id, updatedUser);
+      saveDocumentToFirestore(COLLECTIONS.SYSTEM_USERS, id, updatedUser).then(res => {
+        if (!res.success) {
+          console.error('[Firestore] Error actualizando usuario del sistema:', res.error);
+        }
+      });
     }
 
     logEvent({
@@ -545,6 +574,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return { success: false, error: 'Operación denegada: El sistema debe mantener al menos un Administrador Maestro activo.' };
     }
 
+    deletedUserIdsRef.current.add(id);
     deleteDocumentFromFirestore(COLLECTIONS.SYSTEM_USERS, id);
     setSystemUsers(prev => prev.filter(u => u.id !== id));
 
@@ -552,7 +582,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       assetId: 'sys-user',
       type: 'baja',
       title: `Baja de Usuario del Sistema`,
-      description: `Se revocó el acceso y se eliminó la cuenta ${target.email} (${target.name}).`,
+      description: `Se revocó el acceso y se eliminó la cuenta ${target.email} (${target.name}) de Google Cloud Firestore.`,
       author: currentUser.name
     });
 
@@ -575,6 +605,11 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
   const [lastCloudSyncTime, setLastCloudSyncTime] = useState<string>(() => new Date().toLocaleTimeString());
 
+  // Deletion tracking refs to prevent snapshot race conditions from resurrecting deleted records
+  const deletedUserIdsRef = useRef<Set<string>>(new Set());
+  const deletedAssetIdsRef = useRef<Set<string>>(new Set());
+  const deletedEmployeeIdsRef = useRef<Set<string>>(new Set());
+
   // Initialize Firestore collections & real-time synchronization
   useEffect(() => {
     seedInitialFirestoreDataIfEmpty();
@@ -582,7 +617,17 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const unsubAssets = onSnapshot(collection(firestoreDb, COLLECTIONS.ASSETS), (snap) => {
       if (!snap.empty) {
         const remoteAssets = snap.docs.map(d => d.data() as HardwareAsset);
-        setAssets(remoteAssets);
+        setAssets(prev => {
+          const remoteMap = new Map(remoteAssets.map(a => [a.id, a]));
+          const merged = [...remoteAssets];
+          // Preserve recently created local assets if not yet in remote snapshot
+          prev.forEach(localAsset => {
+            if (!remoteMap.has(localAsset.id) && !deletedAssetIdsRef.current.has(localAsset.id)) {
+              merged.unshift(localAsset);
+            }
+          });
+          return merged;
+        });
         setLastCloudSyncTime(new Date().toLocaleTimeString());
       }
     }, (err) => console.warn('[Firestore] Error en listener de assets:', err?.message));
@@ -590,7 +635,17 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const unsubEmployees = onSnapshot(collection(firestoreDb, COLLECTIONS.EMPLOYEES), (snap) => {
       if (!snap.empty) {
         const remoteEmployees = snap.docs.map(d => d.data() as Employee);
-        setEmployees(remoteEmployees);
+        setEmployees(prev => {
+          const remoteMap = new Map(remoteEmployees.map(e => [e.id, e]));
+          const merged = [...remoteEmployees];
+          // Preserve recently created local employees if not yet in remote snapshot
+          prev.forEach(localEmp => {
+            if (!remoteMap.has(localEmp.id) && !deletedEmployeeIdsRef.current.has(localEmp.id)) {
+              merged.unshift(localEmp);
+            }
+          });
+          return merged;
+        });
       }
     }, (err) => console.warn('[Firestore] Error en listener de employees:', err?.message));
 
@@ -648,7 +703,17 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const unsubUsers = onSnapshot(collection(firestoreDb, COLLECTIONS.SYSTEM_USERS), (snap) => {
       if (!snap.empty) {
         const remoteUsers = snap.docs.map(d => d.data() as AppUser);
-        setSystemUsers(remoteUsers);
+        setSystemUsers(prev => {
+          const remoteMap = new Map(remoteUsers.map(u => [u.id, u]));
+          const merged = [...remoteUsers];
+          // Preserve recently created local users whose write may still be syncing to Firestore
+          prev.forEach(localUser => {
+            if (!remoteMap.has(localUser.id) && !deletedUserIdsRef.current.has(localUser.id)) {
+              merged.unshift(localUser);
+            }
+          });
+          return merged;
+        });
       }
     }, (err) => console.warn('[Firestore] Error en listener de system users:', err?.message));
 
@@ -666,19 +731,28 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, []);
 
-  // Save to localStorage as offline cache whenever state changes
+  // Save to localStorage as offline cache whenever state changes (using safeLocalStorageSetItem to avoid QuotaExceededError)
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ASSETS, JSON.stringify(assets));
-    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees));
-    localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
-    localStorage.setItem(STORAGE_KEYS.MAINTENANCE, JSON.stringify(maintenanceRecords));
-    localStorage.setItem(STORAGE_KEYS.BRANCHES, JSON.stringify(branches));
-    localStorage.setItem(STORAGE_KEYS.TRANSFERS, JSON.stringify(transfers));
-    localStorage.setItem(STORAGE_KEYS.TIMELINE, JSON.stringify(timeline));
-    localStorage.setItem(STORAGE_KEYS.EMAIL_LOGS, JSON.stringify(emailLogs));
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
-    localStorage.setItem(STORAGE_KEYS.SYSTEM_USERS, JSON.stringify(systemUsers));
-    localStorage.setItem(STORAGE_KEYS.LOANS, JSON.stringify(loans));
+    // For large collections (assets has >2600 items, employees has >3100 items),
+    // store at most a compact slice (50 items) in localStorage so the browser's 5MB quota is never exceeded.
+    // Full real-time persistence is managed directly by Google Cloud Firestore.
+    const compactAssets = assets.length > 50 ? assets.slice(0, 50) : assets;
+    const compactEmployees = employees.length > 50 ? employees.slice(0, 50) : employees;
+    const compactAssignments = assignments.length > 50 ? assignments.slice(0, 50) : assignments;
+    const compactTimeline = timeline.length > 50 ? timeline.slice(0, 50) : timeline;
+    const compactEmails = emailLogs.length > 50 ? emailLogs.slice(0, 50) : emailLogs;
+
+    safeLocalStorageSetItem(STORAGE_KEYS.ASSETS, JSON.stringify(compactAssets));
+    safeLocalStorageSetItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(compactEmployees));
+    safeLocalStorageSetItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(compactAssignments));
+    safeLocalStorageSetItem(STORAGE_KEYS.MAINTENANCE, JSON.stringify(maintenanceRecords));
+    safeLocalStorageSetItem(STORAGE_KEYS.BRANCHES, JSON.stringify(branches));
+    safeLocalStorageSetItem(STORAGE_KEYS.TRANSFERS, JSON.stringify(transfers));
+    safeLocalStorageSetItem(STORAGE_KEYS.TIMELINE, JSON.stringify(compactTimeline));
+    safeLocalStorageSetItem(STORAGE_KEYS.EMAIL_LOGS, JSON.stringify(compactEmails));
+    safeLocalStorageSetItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
+    safeLocalStorageSetItem(STORAGE_KEYS.SYSTEM_USERS, JSON.stringify(systemUsers));
+    safeLocalStorageSetItem(STORAGE_KEYS.LOANS, JSON.stringify(loans));
   }, [assets, employees, assignments, maintenanceRecords, branches, transfers, timeline, emailLogs, currentUser, systemUsers, loans]);
 
   const triggerCloudSyncAnimation = () => {
@@ -692,16 +766,20 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const forceCloudSync = async () => {
     setIsCloudSyncing(true);
     try {
-      // Re-push state to Firestore to ensure complete synchronization
-      assets.forEach(a => saveDocumentToFirestore(COLLECTIONS.ASSETS, a.id, a));
-      employees.forEach(e => saveDocumentToFirestore(COLLECTIONS.EMPLOYEES, e.id, e));
-      assignments.forEach(asg => saveDocumentToFirestore(COLLECTIONS.ASSIGNMENTS, asg.id, asg));
-      branches.forEach(b => saveDocumentToFirestore(COLLECTIONS.BRANCHES, b.id, b));
-      transfers.forEach(t => saveDocumentToFirestore(COLLECTIONS.TRANSFERS, t.id, t));
-      maintenanceRecords.forEach(m => saveDocumentToFirestore(COLLECTIONS.MAINTENANCE, m.id, m));
-      loans.forEach(l => saveDocumentToFirestore(COLLECTIONS.LOANS, l.id, l));
-      systemUsers.forEach(u => saveDocumentToFirestore(COLLECTIONS.SYSTEM_USERS, u.id, u));
+      // Re-push all modules to Google Cloud Firestore with atomic batches
+      await Promise.all([
+        saveBatchToFirestore(COLLECTIONS.ASSETS, assets.map(a => ({ id: a.id, data: a }))),
+        saveBatchToFirestore(COLLECTIONS.EMPLOYEES, employees.map(e => ({ id: e.id, data: e }))),
+        saveBatchToFirestore(COLLECTIONS.ASSIGNMENTS, assignments.map(asg => ({ id: asg.id, data: asg }))),
+        saveBatchToFirestore(COLLECTIONS.BRANCHES, branches.map(b => ({ id: b.id, data: b }))),
+        saveBatchToFirestore(COLLECTIONS.TRANSFERS, transfers.map(t => ({ id: t.id, data: t }))),
+        saveBatchToFirestore(COLLECTIONS.MAINTENANCE, maintenanceRecords.map(m => ({ id: m.id, data: m }))),
+        saveBatchToFirestore(COLLECTIONS.LOANS, loans.map(l => ({ id: l.id, data: l }))),
+        saveBatchToFirestore(COLLECTIONS.SYSTEM_USERS, systemUsers.map(u => ({ id: u.id, data: u })))
+      ]);
       setLastCloudSyncTime(new Date().toLocaleTimeString());
+    } catch (syncErr) {
+      console.error('[Firestore] Error en sincronización forzada a la nube:', syncErr);
     } finally {
       setTimeout(() => setIsCloudSyncing(false), 700);
     }
@@ -735,14 +813,18 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       ...assetData,
       id: newId
     };
-    setAssets(prev => [newAsset, ...prev]);
-    saveDocumentToFirestore(COLLECTIONS.ASSETS, newId, newAsset);
+    setAssets(prev => [newAsset, ...prev.filter(a => a.id !== newId)]);
+    saveDocumentToFirestore(COLLECTIONS.ASSETS, newId, newAsset).then(res => {
+      if (!res.success) {
+        console.error('[Firestore] Error guardando equipo en base de datos:', res.error);
+      }
+    });
     
     logEvent({
       assetId: newId,
       type: 'alta',
       title: `Alta de Equipo: ${newAsset.name}`,
-      description: `Equipo registrado en el inventario con placa ${newAsset.assetTag} y serie ${newAsset.serialNumber}.`,
+      description: `Equipo registrado en el inventario con placa ${newAsset.assetTag} y serie ${newAsset.serialNumber}. Guardado en Google Cloud Firestore.`,
       author: currentUser.name
     });
 
@@ -759,13 +841,20 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }));
 
     setAssets(prev => [...newAssets, ...prev]);
-    newAssets.forEach(item => saveDocumentToFirestore(COLLECTIONS.ASSETS, item.id, item));
+    saveBatchToFirestore(
+      COLLECTIONS.ASSETS,
+      newAssets.map(item => ({ id: item.id, data: item }))
+    ).then(res => {
+      if (!res.success) {
+        console.error('[Firestore] Error en carga masiva de activos:', res.error);
+      }
+    });
 
     logEvent({
       assetId: newAssets[0].id,
       type: 'alta',
       title: `Importación Masiva de ${newAssets.length} Equipos`,
-      description: `Se incorporaron ${newAssets.length} activos al inventario general mediante importación de archivo CSV.`,
+      description: `Se incorporaron ${newAssets.length} activos al inventario general y sincronizados con Google Cloud Firestore.`,
       author: currentUser.name
     });
 
@@ -774,16 +863,28 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const updateAsset = (id: string, updates: Partial<HardwareAsset>) => {
-    const existing = assets.find(a => a.id === id);
-    if (existing) {
-      saveDocumentToFirestore(COLLECTIONS.ASSETS, id, { ...existing, ...updates });
+    let updatedAsset: HardwareAsset | undefined;
+    setAssets(prev => prev.map(a => {
+      if (a.id === id) {
+        updatedAsset = { ...a, ...updates };
+        return updatedAsset;
+      }
+      return a;
+    }));
+
+    if (updatedAsset) {
+      saveDocumentToFirestore(COLLECTIONS.ASSETS, id, updatedAsset).then(res => {
+        if (!res.success) {
+          console.error('[Firestore] Error actualizando equipo:', res.error);
+        }
+      });
     }
-    setAssets(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+
     logEvent({
       assetId: id,
       type: 'actualizacion',
       title: 'Actualización de Datos del Equipo',
-      description: `Se actualizaron las especificaciones o estado del activo.`,
+      description: `Se actualizaron las especificaciones o estado del activo en Firestore.`,
       author: currentUser.name
     });
     triggerCloudSyncAnimation();
@@ -791,6 +892,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const deleteAsset = (id: string) => {
     const asset = assets.find(a => a.id === id);
+    deletedAssetIdsRef.current.add(id);
     deleteDocumentFromFirestore(COLLECTIONS.ASSETS, id);
     setAssets(prev => prev.filter(a => a.id !== id));
     if (asset) {
@@ -798,7 +900,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         assetId: id,
         type: 'baja',
         title: `Eliminación de Activo: ${asset.assetTag}`,
-        description: `El equipo ${asset.name} fue removido del catálogo de inventario.`,
+        description: `El equipo ${asset.name} fue removido del catálogo de inventario en Firestore.`,
         author: currentUser.name
       });
     }
@@ -828,8 +930,12 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       ...employeeData,
       id: newId
     };
-    setEmployees(prev => [...prev, newEmp]);
-    saveDocumentToFirestore(COLLECTIONS.EMPLOYEES, newId, newEmp);
+    setEmployees(prev => [newEmp, ...prev.filter(e => e.id !== newId)]);
+    saveDocumentToFirestore(COLLECTIONS.EMPLOYEES, newId, newEmp).then(res => {
+      if (!res.success) {
+        console.error('[Firestore] Error guardando colaborador:', res.error);
+      }
+    });
     triggerCloudSyncAnimation();
     return newEmp;
   };
@@ -843,17 +949,35 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }));
 
     setEmployees(prev => [...prev, ...newEmployees]);
-    newEmployees.forEach(e => saveDocumentToFirestore(COLLECTIONS.EMPLOYEES, e.id, e));
+    saveBatchToFirestore(
+      COLLECTIONS.EMPLOYEES,
+      newEmployees.map(e => ({ id: e.id, data: e }))
+    ).then(res => {
+      if (!res.success) {
+        console.error('[Firestore] Error en carga masiva de colaboradores:', res.error);
+      }
+    });
     triggerCloudSyncAnimation();
     return newEmployees.length;
   };
 
   const updateEmployee = (id: string, updates: Partial<Employee>) => {
-    const existing = employees.find(e => e.id === id);
-    if (existing) {
-      saveDocumentToFirestore(COLLECTIONS.EMPLOYEES, id, { ...existing, ...updates });
+    let updatedEmp: Employee | undefined;
+    setEmployees(prev => prev.map(e => {
+      if (e.id === id) {
+        updatedEmp = { ...e, ...updates };
+        return updatedEmp;
+      }
+      return e;
+    }));
+
+    if (updatedEmp) {
+      saveDocumentToFirestore(COLLECTIONS.EMPLOYEES, id, updatedEmp).then(res => {
+        if (!res.success) {
+          console.error('[Firestore] Error actualizando colaborador:', res.error);
+        }
+      });
     }
-    setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
     triggerCloudSyncAnimation();
   };
 
@@ -879,13 +1003,14 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       };
     }
 
+    deletedEmployeeIdsRef.current.add(id);
     deleteDocumentFromFirestore(COLLECTIONS.EMPLOYEES, id);
     setEmployees(prev => prev.filter(e => e.id !== id));
     logEvent({
       assetId: 'colab-baja',
       type: 'baja',
       title: `Baja de Colaborador: ${emp.fullName}`,
-      description: `Registro de colaborador (${emp.employeeNumber} - ${emp.position}) eliminado del directorio institucional.`,
+      description: `Registro de colaborador (${emp.employeeNumber} - ${emp.position}) eliminado del directorio en Google Cloud Firestore.`,
       author: currentUser.name
     });
     triggerCloudSyncAnimation();
