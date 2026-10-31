@@ -34,7 +34,12 @@ import {
   RotateCcw,
   FileSpreadsheet,
   Upload,
-  Trash2
+  Trash2,
+  CheckSquare,
+  Square,
+  MinusSquare,
+  Layers,
+  ArrowRightLeft
 } from 'lucide-react';
 import { formatCurrency, formatDate, getWarrantyStatus, getMaintenanceStatus, getStatusBadge, getConditionLabel } from '../utils/formatters';
 import { AssetDetailModal } from './AssetDetailModal';
@@ -61,7 +66,20 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
   onOpenMap,
   externalSearch = ''
 }) => {
-  const { assets, branches, employees, addAsset, returnAsset, deleteAsset, currentUser, canEdit, isViewer } = useInventory();
+  const { 
+    assets, 
+    branches, 
+    employees, 
+    addAsset, 
+    returnAsset, 
+    deleteAsset, 
+    bulkUpdateAssets, 
+    bulkDeleteAssets, 
+    bulkRetireAssets, 
+    currentUser, 
+    canEdit, 
+    isViewer 
+  } = useInventory();
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -101,6 +119,22 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
     setCsvMessage(`Se exportaron ${result.count} equipos de hardware en formato CSV exitosamente.`);
     setTimeout(() => setCsvMessage(null), 4500);
   };
+
+  // Bulk actions state
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [bulkActionFeedback, setBulkActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
+  const [bulkStatusValue, setBulkStatusValue] = useState<AssetStatus>('disponible');
+  const [showBulkBranchModal, setShowBulkBranchModal] = useState(false);
+  const [bulkBranchValue, setBulkBranchValue] = useState<string>(branches[0]?.id || '');
+  const [bulkLocationValue, setBulkLocationValue] = useState<string>('Almacén General');
+  const [showBulkMaintModal, setShowBulkMaintModal] = useState(false);
+  const [bulkMaintDate, setBulkMaintDate] = useState<string>('2026-11-15');
+  const [bulkMaintInterval, setBulkMaintInterval] = useState<number>(6);
+  const [showBulkRetireModal, setShowBulkRetireModal] = useState(false);
+  const [bulkRetireReason, setBulkRetireReason] = useState<string>('Obsolescencia tecnológica y fin de ciclo de vida.');
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [isBulkExecuting, setIsBulkExecuting] = useState(false);
 
   // Return to warehouse modal states
   const [returnModalAsset, setReturnModalAsset] = useState<HardwareAsset | null>(null);
@@ -176,6 +210,189 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
 
     return matchesSearch && matchesCategory && matchesStatus && matchesBranch && matchesObsolete;
   });
+
+  const handleToggleSelectAsset = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedAssetIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allFilteredSelected = filteredAssets.length > 0 && filteredAssets.every(a => selectedAssetIds.has(a.id));
+  const someFilteredSelected = filteredAssets.some(a => selectedAssetIds.has(a.id)) && !allFilteredSelected;
+
+  const handleToggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedAssetIds(prev => {
+        const next = new Set(prev);
+        filteredAssets.forEach(a => next.delete(a.id));
+        return next;
+      });
+    } else {
+      setSelectedAssetIds(prev => {
+        const next = new Set(prev);
+        filteredAssets.forEach(a => next.add(a.id));
+        return next;
+      });
+    }
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedAssetIds(new Set());
+  };
+
+  const handleExportSelectedCsv = () => {
+    const selectedList = assets.filter(a => selectedAssetIds.has(a.id));
+    if (selectedList.length === 0) return;
+    const result = exportHardwareInventoryCsv(selectedList, branches, employees);
+    setBulkActionFeedback({
+      type: 'success',
+      message: `Se exportaron ${result.count} equipos seleccionados a CSV exitosamente.`
+    });
+    setTimeout(() => setBulkActionFeedback(null), 4500);
+  };
+
+  const handleExecuteBulkStatus = async () => {
+    const ids = Array.from(selectedAssetIds);
+    if (ids.length === 0) return;
+    setIsBulkExecuting(true);
+    try {
+      const partial: Partial<HardwareAsset> = { status: bulkStatusValue };
+      if (bulkStatusValue === 'disponible' || bulkStatusValue === 'baja') {
+        partial.assignedToEmployeeId = undefined;
+      }
+      const updatedCount = await bulkUpdateAssets(ids, partial);
+      setBulkActionFeedback({
+        type: 'success',
+        message: `Se actualizó el estado a "${bulkStatusValue}" en ${updatedCount} equipos exitosamente.`
+      });
+      setShowBulkStatusModal(false);
+      handleDeselectAll();
+    } catch (err: any) {
+      setBulkActionFeedback({
+        type: 'error',
+        message: `Error en actualización masiva de estado: ${err.message || 'Error desconocido'}`
+      });
+    } finally {
+      setIsBulkExecuting(false);
+      setTimeout(() => setBulkActionFeedback(null), 5000);
+    }
+  };
+
+  const handleExecuteBulkBranch = async () => {
+    const ids = Array.from(selectedAssetIds);
+    if (ids.length === 0) return;
+    setIsBulkExecuting(true);
+    try {
+      const targetBranch = branches.find(b => b.id === bulkBranchValue);
+      const updatedCount = await bulkUpdateAssets(ids, {
+        branchId: bulkBranchValue,
+        locationDetails: bulkLocationValue
+      });
+      setBulkActionFeedback({
+        type: 'success',
+        message: `Se reasignaron ${updatedCount} equipos a la sucursal "${targetBranch?.name || bulkBranchValue}".`
+      });
+      setShowBulkBranchModal(false);
+      handleDeselectAll();
+    } catch (err: any) {
+      setBulkActionFeedback({
+        type: 'error',
+        message: `Error al reasignar sucursal masivamente: ${err.message || 'Error desconocido'}`
+      });
+    } finally {
+      setIsBulkExecuting(false);
+      setTimeout(() => setBulkActionFeedback(null), 5000);
+    }
+  };
+
+  const handleExecuteBulkMaint = async () => {
+    const ids = Array.from(selectedAssetIds);
+    if (ids.length === 0) return;
+    setIsBulkExecuting(true);
+    try {
+      const updatedCount = await bulkUpdateAssets(ids, {
+        nextMaintenanceDate: bulkMaintDate,
+        maintenanceIntervalMonths: Number(bulkMaintInterval) || 6
+      });
+      setBulkActionFeedback({
+        type: 'success',
+        message: `Se programó mantenimiento preventivo (${bulkMaintDate}) para ${updatedCount} equipos.`
+      });
+      setShowBulkMaintModal(false);
+      handleDeselectAll();
+    } catch (err: any) {
+      setBulkActionFeedback({
+        type: 'error',
+        message: `Error al programar mantenimiento masivo: ${err.message || 'Error desconocido'}`
+      });
+    } finally {
+      setIsBulkExecuting(false);
+      setTimeout(() => setBulkActionFeedback(null), 5000);
+    }
+  };
+
+  const handleExecuteBulkRetire = async () => {
+    const ids = Array.from(selectedAssetIds);
+    if (ids.length === 0) return;
+    setIsBulkExecuting(true);
+    try {
+      const count = await bulkRetireAssets(ids, bulkRetireReason);
+      setBulkActionFeedback({
+        type: 'success',
+        message: `Se aplicó baja técnica institucional a ${count} equipos.`
+      });
+      setShowBulkRetireModal(false);
+      handleDeselectAll();
+    } catch (err: any) {
+      setBulkActionFeedback({
+        type: 'error',
+        message: `Error al aplicar baja masiva: ${err.message || 'Error desconocido'}`
+      });
+    } finally {
+      setIsBulkExecuting(false);
+      setTimeout(() => setBulkActionFeedback(null), 5000);
+    }
+  };
+
+  const handleExecuteBulkDelete = async () => {
+    const ids = Array.from(selectedAssetIds);
+    if (ids.length === 0) return;
+
+    // Check if any selected asset is currently assigned to an employee
+    const assigned = assets.filter(a => ids.includes(a.id) && a.status === 'asignado');
+    if (assigned.length > 0) {
+      setBulkActionFeedback({
+        type: 'error',
+        message: `No se pueden eliminar ${assigned.length} equipos que aún están asignados a colaboradores (${assigned.slice(0, 3).map(a => a.assetTag).join(', ')}...). Debe registrarse primero su devolución a almacén o desasignación.`
+      });
+      setShowBulkDeleteModal(false);
+      setTimeout(() => setBulkActionFeedback(null), 7000);
+      return;
+    }
+
+    setIsBulkExecuting(true);
+    try {
+      const res = await bulkDeleteAssets(ids);
+      setBulkActionFeedback({
+        type: 'success',
+        message: `Se eliminaron permanentemente ${res.count} equipos del inventario y base de datos.`
+      });
+      setShowBulkDeleteModal(false);
+      handleDeselectAll();
+    } catch (err: any) {
+      setBulkActionFeedback({
+        type: 'error',
+        message: `Error al eliminar equipos masivamente: ${err.message || 'Error desconocido'}`
+      });
+    } finally {
+      setIsBulkExecuting(false);
+      setTimeout(() => setBulkActionFeedback(null), 5000);
+    }
+  };
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -577,9 +794,119 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
         </div>
       </div>
 
+      {/* Bulk Action Feedback Message */}
+      {bulkActionFeedback && (
+        <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between ${
+          bulkActionFeedback.type === 'success' 
+            ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
+            : 'bg-rose-50 border-rose-300 text-rose-900'
+        }`}>
+          <span>{bulkActionFeedback.message}</span>
+          <button onClick={() => setBulkActionFeedback(null)} className="text-slate-500 hover:text-slate-800 font-bold ml-2 cursor-pointer">✕</button>
+        </div>
+      )}
+
+      {/* Floating / Sticky Bulk Actions Toolbar */}
+      {selectedAssetIds.size > 0 && (
+        <div className="bg-[#1e293b] text-white p-3 sm:p-4 rounded-xl shadow-lg border border-slate-700 flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-[#ff8200] text-slate-900 font-black text-xs">
+              {selectedAssetIds.size}
+            </span>
+            <div>
+              <p className="text-sm font-bold text-white flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-[#ff8200]" />
+                <span>{selectedAssetIds.size} {selectedAssetIds.size === 1 ? 'equipo seleccionado' : 'equipos seleccionados'}</span>
+              </p>
+              <p className="text-[11px] text-slate-300 font-medium">
+                Acciones por lote sobre los activos de hardware marcados
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowBulkStatusModal(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Modificar estado de los equipos seleccionados"
+            >
+              <Tag className="w-3.5 h-3.5 text-amber-400" />
+              <span>Cambiar Estado</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowBulkBranchModal(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Reasignar sucursal o almacén destino"
+            >
+              <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Reasignar Sucursal</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowBulkMaintModal(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Programar fecha de mantenimiento preventivo"
+            >
+              <Wrench className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Mantenimiento</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowBulkRetireModal(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-600/50 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Baja técnica institucional de equipos"
+            >
+              <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+              <span>Baja Técnica</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportSelectedCsv}
+              className="px-2.5 py-1.5 rounded-lg bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 border border-emerald-600/50 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Exportar únicamente los seleccionados a CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Exportar CSV ({selectedAssetIds.size})</span>
+            </button>
+
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setShowBulkDeleteModal(true)}
+                className="px-2.5 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-700 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Eliminación definitiva de los equipos seleccionados"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Eliminar ({selectedAssetIds.size})</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleDeselectAll}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 transition-colors cursor-pointer"
+              title="Deseleccionar todos"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Assets Count indicator */}
       <div className="flex items-center justify-between text-xs text-slate-700 font-medium px-1">
         <span>Mostrando <strong className="text-slate-900">{filteredAssets.length}</strong> de <strong className="text-slate-900">{assets.length}</strong> equipos registrados</span>
+        {selectedAssetIds.size > 0 && (
+          <span className="text-[#004a99] font-bold">
+            {selectedAssetIds.size} seleccionados
+          </span>
+        )}
       </div>
 
       {/* Render Table or Grid */}
@@ -589,6 +916,18 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-100 border-b border-slate-200 text-slate-900 font-bold uppercase tracking-wider text-[11px]">
+                  <th className="py-3.5 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      ref={el => {
+                        if (el) el.indeterminate = someFilteredSelected;
+                      }}
+                      onChange={handleToggleSelectAll}
+                      className="w-4 h-4 rounded border-slate-300 text-[#ff8200] focus:ring-[#ff8200] cursor-pointer"
+                      title={allFilteredSelected ? "Deseleccionar todos" : "Seleccionar todos los mostrados"}
+                    />
+                  </th>
                   <th className="py-3.5 px-4 font-bold text-slate-900">Placa / Tag</th>
                   <th className="py-3.5 px-4 font-bold text-slate-900">Equipo / Hardware</th>
                   <th className="py-3.5 px-4 font-bold text-slate-900">Serie (S/N)</th>
@@ -602,7 +941,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
               <tbody className="divide-y divide-slate-200">
                 {filteredAssets.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-600 font-medium text-sm">
+                    <td colSpan={9} className="py-12 text-center text-slate-600 font-medium text-sm">
                       No se encontraron equipos con los criterios de búsqueda aplicados.
                     </td>
                   </tr>
@@ -613,13 +952,25 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                     const statusBadge = getStatusBadge(asset.status);
                     const warranty = getWarrantyStatus(asset.warrantyEndDate);
                     const maintenance = getMaintenanceStatus(asset.nextMaintenanceDate);
+                    const isSelected = selectedAssetIds.has(asset.id);
 
                     return (
                       <tr 
                         key={asset.id} 
-                        className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                        className={`transition-colors cursor-pointer group ${
+                          isSelected ? 'bg-amber-50/70 hover:bg-amber-100/60' : 'hover:bg-slate-50'
+                        }`}
                         onClick={() => setDetailAsset(asset)}
                       >
+                        <td className="py-3 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectAsset(asset.id)}
+                            className="w-4 h-4 rounded border-slate-300 text-[#ff8200] focus:ring-[#ff8200] cursor-pointer"
+                          />
+                        </td>
+
                         <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             {getCategoryIcon(asset.category)}
@@ -775,18 +1126,30 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
             const statusBadge = getStatusBadge(asset.status);
             const warranty = getWarrantyStatus(asset.warrantyEndDate);
             const maintenance = getMaintenanceStatus(asset.nextMaintenanceDate);
+            const isSelected = selectedAssetIds.has(asset.id);
 
             return (
               <div 
                 key={asset.id}
                 onClick={() => setDetailAsset(asset)}
-                className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
+                className={`rounded-xl border p-4 shadow-xs hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between ${
+                  isSelected ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200'
+                }`}
               >
                 <div>
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div className="flex items-center gap-1.5 font-mono font-bold text-xs text-indigo-600">
-                      {getCategoryIcon(asset.category)}
-                      <span>{asset.assetTag}</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleSelectAsset(asset.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4 h-4 rounded border-slate-300 text-[#ff8200] focus:ring-[#ff8200] cursor-pointer"
+                      />
+                      <div className="flex items-center gap-1.5 font-mono font-bold text-xs text-indigo-600">
+                        {getCategoryIcon(asset.category)}
+                        <span>{asset.assetTag}</span>
+                      </div>
                     </div>
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusBadge.className}`}>
                       {statusBadge.label}
@@ -1320,6 +1683,317 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
           </div>
         );
       })()}
+
+      {/* Bulk Status Change Modal */}
+      {showBulkStatusModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[#ff8200] font-mono font-bold uppercase">Acción Masiva de Inventario</p>
+                <h3 className="font-bold text-base text-white">Cambiar Estado ({selectedAssetIds.size} equipos)</h3>
+              </div>
+              <button onClick={() => setShowBulkStatusModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs sm:text-sm">
+              <p className="text-slate-600">
+                Selecciona el nuevo estado operativo que se aplicará en lote a los <strong>{selectedAssetIds.size}</strong> equipos marcados:
+              </p>
+
+              <div>
+                <label className="font-bold text-slate-800 block mb-1.5">Nuevo Estado</label>
+                <select
+                  value={bulkStatusValue}
+                  onChange={(e) => setBulkStatusValue(e.target.value as AssetStatus)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
+                >
+                  <option value="disponible">En Almacén (Disponible para entrega)</option>
+                  <option value="mantenimiento">En Taller / Mantenimiento Preventivo</option>
+                  <option value="traslado">En Proceso de Traslado entre Sedes</option>
+                  <option value="baja">Dado de Baja / Fuera de Operación</option>
+                </select>
+              </div>
+
+              {(bulkStatusValue === 'disponible' || bulkStatusValue === 'baja') && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Aviso importante:</strong> Al cambiar a <em>{bulkStatusValue}</em>, los equipos que estén actualmente en resguardo de algún colaborador quedarán desvinculados para reflejar su ingreso a almacén.
+                  </span>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkStatusModal(false)}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkStatus}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl bg-[#004a99] hover:bg-[#003875] text-white font-bold cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Tag className="w-4 h-4" />
+                  <span>{isBulkExecuting ? 'Actualizando...' : `Aplicar a ${selectedAssetIds.size} Equipos`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Branch Reassignment Modal */}
+      {showBulkBranchModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <p className="text-xs text-indigo-400 font-mono font-bold uppercase">Acción Masiva de Sucursal</p>
+                <h3 className="font-bold text-base text-white">Reasignar Sede / Almacén ({selectedAssetIds.size} equipos)</h3>
+              </div>
+              <button onClick={() => setShowBulkBranchModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs sm:text-sm">
+              <p className="text-slate-600">
+                Reubica físicamente los <strong>{selectedAssetIds.size}</strong> equipos a la siguiente sucursal y almacén:
+              </p>
+
+              <div>
+                <label className="font-bold text-slate-800 block mb-1.5">Sucursal Destino *</label>
+                <select
+                  value={bulkBranchValue}
+                  onChange={(e) => setBulkBranchValue(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
+                >
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>{b.name} ({b.city}, {b.state})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-800 block mb-1.5">Detalles de Ubicación Física</label>
+                <input
+                  type="text"
+                  value={bulkLocationValue}
+                  onChange={(e) => setBulkLocationValue(e.target.value)}
+                  placeholder="Ej. Almacén General TI - Rack B4"
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkBranchModal(false)}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkBranch}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Building2 className="w-4 h-4" />
+                  <span>{isBulkExecuting ? 'Reasignando...' : `Reasignar ${selectedAssetIds.size} Equipos`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Maintenance Schedule Modal */}
+      {showBulkMaintModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <p className="text-xs text-cyan-400 font-mono font-bold uppercase">Mantenimiento Preventivo Masivo</p>
+                <h3 className="font-bold text-base text-white">Programar Fecha ({selectedAssetIds.size} equipos)</h3>
+              </div>
+              <button onClick={() => setShowBulkMaintModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs sm:text-sm">
+              <p className="text-slate-600">
+                Establece la próxima fecha programada de servicio técnico y el intervalo de mantenimiento para los <strong>{selectedAssetIds.size}</strong> equipos:
+              </p>
+
+              <div>
+                <label className="font-bold text-slate-800 block mb-1.5">Próxima Fecha de Servicio *</label>
+                <input
+                  type="date"
+                  value={bulkMaintDate}
+                  onChange={(e) => setBulkMaintDate(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-800 block mb-1.5">Intervalo Periódico (Meses)</label>
+                <select
+                  value={bulkMaintInterval}
+                  onChange={(e) => setBulkMaintInterval(Number(e.target.value))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
+                >
+                  <option value={3}>Cada 3 meses (Trimestral)</option>
+                  <option value={6}>Cada 6 meses (Semestral)</option>
+                  <option value={12}>Cada 12 meses (Anual)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkMaintModal(false)}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkMaint}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl bg-cyan-700 hover:bg-cyan-800 text-white font-bold cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Wrench className="w-4 h-4" />
+                  <span>{isBulkExecuting ? 'Guardando...' : `Programar ${selectedAssetIds.size} Equipos`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Technical Retire Modal */}
+      {showBulkRetireModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <p className="text-xs text-amber-400 font-mono font-bold uppercase">Baja Técnica por Lote</p>
+                <h3 className="font-bold text-base text-white">Dictamen de Baja ({selectedAssetIds.size} equipos)</h3>
+              </div>
+              <button onClick={() => setShowBulkRetireModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs sm:text-sm">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Procedimiento de Baja Técnica Oficial</span>
+                </p>
+                <p>
+                  Esta operación cambiará el estado de los <strong>{selectedAssetIds.size}</strong> equipos a <strong>"baja"</strong> y su condición a <strong>"obsoleto"</strong>. Se desvinculará cualquier colaborador asignado.
+                </p>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-800 block mb-1.5">Motivo o Justificación Técnica de la Baja *</label>
+                <textarea
+                  rows={3}
+                  value={bulkRetireReason}
+                  onChange={(e) => setBulkRetireReason(e.target.value)}
+                  placeholder="Ej. Obsolescencia tecnológica, daño irreparable en tarjeta madre o fin de ciclo contable de vida útil."
+                  className="w-full p-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkRetireModal(false)}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkRetire}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{isBulkExecuting ? 'Aplicando Baja...' : `Confirmar Baja de ${selectedAssetIds.size} Equipos`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Permanent Delete Modal */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-rose-900 text-white flex items-center justify-between">
+              <div>
+                <p className="text-xs text-rose-200 font-mono font-bold uppercase">Eliminación Masiva Definitiva</p>
+                <h3 className="font-bold text-base text-white">Eliminar {selectedAssetIds.size} Equipos</h3>
+              </div>
+              <button onClick={() => setShowBulkDeleteModal(false)} className="text-rose-200 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs sm:text-sm">
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>¡Advertencia de Acción Irreversible!</span>
+                </p>
+                <p>
+                  Estás a punto de borrar permanentemente <strong>{selectedAssetIds.size}</strong> equipos del inventario y de la base de datos de Google Cloud Firestore.
+                </p>
+                <p className="text-slate-600 pt-1 font-mono text-[11px]">
+                  Nota de seguridad: Los equipos que estén actualmente asignados a colaboradores no podrán eliminarse hasta registrar su devolución a almacén.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkDelete}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{isBulkExecuting ? 'Eliminando...' : `Eliminar ${selectedAssetIds.size} Definitivamente`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CSV Import Modal */}
       {showImportModal && (

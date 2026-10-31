@@ -20,7 +20,11 @@ import {
   Check,
   RotateCcw,
   FileSpreadsheet,
-  Upload
+  Upload,
+  Layers,
+  Download,
+  AlertCircle,
+  Tag
 } from 'lucide-react';
 import { formatDate } from '../utils/formatters';
 import { exportEmployeesCsv } from '../utils/exportCsv';
@@ -36,7 +40,19 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
   onAssignToEmployee,
   onViewAssetDetail
 }) => {
-  const { employees, assets, branches, loans, addEmployee, updateEmployee, deleteEmployee, canEdit, returnAsset } = useInventory();
+  const { 
+    employees, 
+    assets, 
+    branches, 
+    loans, 
+    addEmployee, 
+    updateEmployee, 
+    deleteEmployee, 
+    bulkUpdateEmployees, 
+    bulkDeleteEmployees, 
+    canEdit, 
+    returnAsset 
+  } = useInventory();
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('all');
   const [selectedEmployeeForCustody, setSelectedEmployeeForCustody] = useState<Employee | null>(null);
@@ -54,6 +70,18 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [employeeActionFeedback, setEmployeeActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Bulk actions state
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
+  const [bulkStatusValue, setBulkStatusValue] = useState<'activo' | 'licencia' | 'baja'>('activo');
+  const [showBulkBranchModal, setShowBulkBranchModal] = useState(false);
+  const [bulkBranchValue, setBulkBranchValue] = useState<string>(branches[0]?.id || '');
+  const [showBulkDeptModal, setShowBulkDeptModal] = useState(false);
+  const [bulkDeptValue, setBulkDeptValue] = useState<string>('Tecnologías de Información');
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [isBulkExecuting, setIsBulkExecuting] = useState(false);
+  const [bulkBlockedList, setBulkBlockedList] = useState<Array<{ id: string; name: string; reason: string }>>([]);
 
   const [editEmployeeForm, setEditEmployeeForm] = useState<Employee>({
     id: '',
@@ -94,6 +122,158 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
     const matchesDept = selectedDept === 'all' || emp.department === selectedDept;
     return matchesSearch && matchesDept;
   });
+
+  const handleToggleSelectEmployee = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedEmployeeIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allFilteredSelected = filteredEmployees.length > 0 && filteredEmployees.every(e => selectedEmployeeIds.has(e.id));
+  const someFilteredSelected = filteredEmployees.some(e => selectedEmployeeIds.has(e.id)) && !allFilteredSelected;
+
+  const handleToggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedEmployeeIds(prev => {
+        const next = new Set(prev);
+        filteredEmployees.forEach(e => next.delete(e.id));
+        return next;
+      });
+    } else {
+      setSelectedEmployeeIds(prev => {
+        const next = new Set(prev);
+        filteredEmployees.forEach(e => next.add(e.id));
+        return next;
+      });
+    }
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedEmployeeIds(new Set());
+    setBulkBlockedList([]);
+  };
+
+  const handleExportSelectedCsv = () => {
+    const selectedList = employees.filter(e => selectedEmployeeIds.has(e.id));
+    if (selectedList.length === 0) return;
+    const result = exportEmployeesCsv(selectedList, assets, branches);
+    setEmployeeActionFeedback({
+      type: 'success',
+      message: `Se exportaron ${result.count} colaboradores seleccionados a CSV exitosamente.`
+    });
+    setTimeout(() => setEmployeeActionFeedback(null), 4500);
+  };
+
+  const handleExecuteBulkStatus = async () => {
+    const ids = Array.from(selectedEmployeeIds);
+    if (ids.length === 0) return;
+    setIsBulkExecuting(true);
+    try {
+      const count = await bulkUpdateEmployees(ids, { status: bulkStatusValue });
+      setEmployeeActionFeedback({
+        type: 'success',
+        message: `Se actualizó el estatus a "${bulkStatusValue}" en ${count} colaboradores exitosamente.`
+      });
+      setShowBulkStatusModal(false);
+      handleDeselectAll();
+    } catch (err: any) {
+      setEmployeeActionFeedback({
+        type: 'error',
+        message: `Error al actualizar estatus masivamente: ${err.message || 'Error desconocido'}`
+      });
+    } finally {
+      setIsBulkExecuting(false);
+      setTimeout(() => setEmployeeActionFeedback(null), 5000);
+    }
+  };
+
+  const handleExecuteBulkBranch = async () => {
+    const ids = Array.from(selectedEmployeeIds);
+    if (ids.length === 0) return;
+    setIsBulkExecuting(true);
+    try {
+      const targetBranch = branches.find(b => b.id === bulkBranchValue);
+      const count = await bulkUpdateEmployees(ids, { branchId: bulkBranchValue });
+      setEmployeeActionFeedback({
+        type: 'success',
+        message: `Se reasignaron ${count} colaboradores a la sucursal "${targetBranch?.name || bulkBranchValue}".`
+      });
+      setShowBulkBranchModal(false);
+      handleDeselectAll();
+    } catch (err: any) {
+      setEmployeeActionFeedback({
+        type: 'error',
+        message: `Error al reasignar sucursal masivamente: ${err.message || 'Error desconocido'}`
+      });
+    } finally {
+      setIsBulkExecuting(false);
+      setTimeout(() => setEmployeeActionFeedback(null), 5000);
+    }
+  };
+
+  const handleExecuteBulkDept = async () => {
+    const ids = Array.from(selectedEmployeeIds);
+    if (ids.length === 0) return;
+    if (!bulkDeptValue.trim()) {
+      alert('Por favor especifica el nombre del departamento.');
+      return;
+    }
+    setIsBulkExecuting(true);
+    try {
+      const count = await bulkUpdateEmployees(ids, { department: bulkDeptValue.trim() });
+      setEmployeeActionFeedback({
+        type: 'success',
+        message: `Se cambió el departamento a "${bulkDeptValue.trim()}" en ${count} colaboradores.`
+      });
+      setShowBulkDeptModal(false);
+      handleDeselectAll();
+    } catch (err: any) {
+      setEmployeeActionFeedback({
+        type: 'error',
+        message: `Error al cambiar departamento: ${err.message || 'Error desconocido'}`
+      });
+    } finally {
+      setIsBulkExecuting(false);
+      setTimeout(() => setEmployeeActionFeedback(null), 5000);
+    }
+  };
+
+  const handleExecuteBulkDelete = async () => {
+    const ids = Array.from(selectedEmployeeIds);
+    if (ids.length === 0) return;
+    setIsBulkExecuting(true);
+    try {
+      const result = await bulkDeleteEmployees(ids);
+      if (result.blockedEmployees.length > 0) {
+        setBulkBlockedList(result.blockedEmployees);
+      }
+      if (result.deletedCount > 0) {
+        setEmployeeActionFeedback({
+          type: 'success',
+          message: `Se eliminaron ${result.deletedCount} colaboradores exitosamente.` + (result.blockedEmployees.length > 0 ? ` (${result.blockedEmployees.length} colaboradores protegidos por tener equipos asignados o préstamos activos).` : '')
+        });
+      } else if (result.blockedEmployees.length > 0) {
+        setEmployeeActionFeedback({
+          type: 'error',
+          message: `No fue posible eliminar los colaboradores seleccionados porque todos tienen equipos en resguardo o préstamos activos.`
+        });
+      }
+      setShowBulkDeleteModal(false);
+      handleDeselectAll();
+    } catch (err: any) {
+      setEmployeeActionFeedback({
+        type: 'error',
+        message: `Error en baja masiva: ${err.message || 'Error desconocido'}`
+      });
+    } finally {
+      setIsBulkExecuting(false);
+      setTimeout(() => setEmployeeActionFeedback(null), 7000);
+    }
+  };
 
   const handleOpenReturnModal = (asset: HardwareAsset) => {
     setAssetToReturn(asset);
@@ -303,27 +483,161 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
         </div>
       </div>
 
+      {/* Blocked employees feedback alert */}
+      {bulkBlockedList.length > 0 && (
+        <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-xs space-y-1.5 animate-in fade-in">
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-amber-900 flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 text-amber-700" />
+              <span>Colaboradores protegidos contra eliminación ({bulkBlockedList.length}):</span>
+            </span>
+            <button onClick={() => setBulkBlockedList([])} className="text-amber-700 hover:text-amber-900 font-bold cursor-pointer">✕</button>
+          </div>
+          <ul className="list-disc pl-5 text-amber-800 space-y-0.5">
+            {bulkBlockedList.map(b => (
+              <li key={b.id}>
+                <strong>{b.name}:</strong> {b.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Floating / Sticky Bulk Actions Toolbar */}
+      {selectedEmployeeIds.size > 0 && (
+        <div className="bg-[#1e293b] text-white p-3 sm:p-4 rounded-xl shadow-lg border border-slate-700 flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-[#ff8200] text-slate-900 font-black text-xs">
+              {selectedEmployeeIds.size}
+            </span>
+            <div>
+              <p className="text-sm font-bold text-white flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-[#ff8200]" />
+                <span>{selectedEmployeeIds.size} {selectedEmployeeIds.size === 1 ? 'colaborador seleccionado' : 'colaboradores seleccionados'}</span>
+              </p>
+              <p className="text-[11px] text-slate-300 font-medium">
+                Acciones por lote sobre el personal marcado
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowBulkStatusModal(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Modificar estatus de los colaboradores seleccionados"
+            >
+              <Tag className="w-3.5 h-3.5 text-amber-400" />
+              <span>Cambiar Estatus</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowBulkBranchModal(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Reasignar sucursal sede"
+            >
+              <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Reasignar Sucursal</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowBulkDeptModal(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Cambiar departamento asignado"
+            >
+              <Briefcase className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Cambiar Depto.</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportSelectedCsv}
+              className="px-2.5 py-1.5 rounded-lg bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 border border-emerald-600/50 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Exportar únicamente los seleccionados a CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Exportar CSV ({selectedEmployeeIds.size})</span>
+            </button>
+
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setShowBulkDeleteModal(true)}
+                className="px-2.5 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-700 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Baja y eliminación de colaboradores"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Baja / Eliminar ({selectedEmployeeIds.size})</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleDeselectAll}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 transition-colors cursor-pointer"
+              title="Deseleccionar todos"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Select All / Count indicator */}
+      <div className="flex items-center justify-between text-xs text-slate-700 font-medium px-1">
+        <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 hover:text-[#004a99]">
+          <input
+            type="checkbox"
+            checked={allFilteredSelected}
+            ref={el => {
+              if (el) el.indeterminate = someFilteredSelected;
+            }}
+            onChange={handleToggleSelectAll}
+            className="w-4 h-4 rounded border-slate-300 text-[#ff8200] focus:ring-[#ff8200] cursor-pointer"
+          />
+          <span>Seleccionar todos los mostrados ({filteredEmployees.length})</span>
+        </label>
+        <span>
+          Mostrando <strong className="text-slate-900">{filteredEmployees.length}</strong> de <strong className="text-slate-900">{employees.length}</strong> colaboradores
+        </span>
+      </div>
+
       {/* Employees Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredEmployees.map(emp => {
           const branch = branches.find(b => b.id === emp.branchId);
           const assignedAssets = assets.filter(a => a.assignedToEmployeeId === emp.id && a.status === 'asignado');
+          const isSelected = selectedEmployeeIds.has(emp.id);
 
           return (
             <div 
               key={emp.id}
-              className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs hover:border-indigo-300 transition-all flex flex-col justify-between"
+              className={`rounded-xl border p-4 shadow-xs hover:border-indigo-300 transition-all flex flex-col justify-between ${
+                isSelected ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200'
+              }`}
             >
               <div>
                 <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
-                    {emp.avatarUrl ? (
-                      <img src={emp.avatarUrl} alt={emp.fullName} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center font-bold text-slate-500">
-                        {emp.fullName.charAt(0)}
-                      </div>
-                    )}
+                  <div className="flex flex-col items-center gap-2 shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggleSelectEmployee(emp.id)}
+                      className="w-4 h-4 rounded border-slate-300 text-[#ff8200] focus:ring-[#ff8200] cursor-pointer"
+                      title="Seleccionar colaborador para acciones masivas"
+                    />
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden">
+                      {emp.avatarUrl ? (
+                        <img src={emp.avatarUrl} alt={emp.fullName} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center font-bold text-slate-500 text-sm">
+                          {emp.fullName.charAt(0)}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="min-w-0 flex-1">
@@ -990,6 +1304,238 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
           </div>
         );
       })()}
+
+      {/* Bulk Status Change Modal */}
+      {showBulkStatusModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[#ff8200] font-mono font-bold uppercase">Acción Masiva de Personal</p>
+                <h3 className="font-bold text-base text-white">Cambiar Estatus ({selectedEmployeeIds.size} colaboradores)</h3>
+              </div>
+              <button onClick={() => setShowBulkStatusModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs sm:text-sm">
+              <p className="text-slate-600">
+                Selecciona el nuevo estatus laboral que se aplicará en lote a los <strong>{selectedEmployeeIds.size}</strong> colaboradores:
+              </p>
+
+              <div>
+                <label className="font-bold text-slate-800 block mb-1.5">Nuevo Estatus *</label>
+                <select
+                  value={bulkStatusValue}
+                  onChange={(e) => setBulkStatusValue(e.target.value as any)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
+                >
+                  <option value="activo">Activo (Personal en operaciones)</option>
+                  <option value="licencia">Licencia / Permiso temporal</option>
+                  <option value="baja">Baja laboral (Inactivo)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkStatusModal(false)}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkStatus}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl bg-[#004a99] hover:bg-[#003875] text-white font-bold cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Tag className="w-4 h-4" />
+                  <span>{isBulkExecuting ? 'Actualizando...' : `Aplicar a ${selectedEmployeeIds.size} Colaboradores`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Branch Reassignment Modal */}
+      {showBulkBranchModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <p className="text-xs text-indigo-400 font-mono font-bold uppercase">Acción Masiva de Sucursal</p>
+                <h3 className="font-bold text-base text-white">Reasignar Sucursal Sede ({selectedEmployeeIds.size} colaboradores)</h3>
+              </div>
+              <button onClick={() => setShowBulkBranchModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs sm:text-sm">
+              <p className="text-slate-600">
+                Asigna una nueva sucursal o sede física a los <strong>{selectedEmployeeIds.size}</strong> colaboradores:
+              </p>
+
+              <div>
+                <label className="font-bold text-slate-800 block mb-1.5">Sucursal / Sede *</label>
+                <select
+                  value={bulkBranchValue}
+                  onChange={(e) => setBulkBranchValue(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
+                >
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>{b.name} ({b.city}, {b.state})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkBranchModal(false)}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkBranch}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Building2 className="w-4 h-4" />
+                  <span>{isBulkExecuting ? 'Reasignando...' : `Reasignar ${selectedEmployeeIds.size} Colaboradores`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Department Modal */}
+      {showBulkDeptModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <p className="text-xs text-cyan-400 font-mono font-bold uppercase">Acción Masiva de Organización</p>
+                <h3 className="font-bold text-base text-white">Cambiar Departamento ({selectedEmployeeIds.size} colaboradores)</h3>
+              </div>
+              <button onClick={() => setShowBulkDeptModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs sm:text-sm">
+              <p className="text-slate-600">
+                Actualiza el departamento asignado para los <strong>{selectedEmployeeIds.size}</strong> colaboradores:
+              </p>
+
+              <div>
+                <label className="font-bold text-slate-800 block mb-1.5">Elegir de Departamentos Existentes</label>
+                <select
+                  value={departments.includes(bulkDeptValue) ? bulkDeptValue : ''}
+                  onChange={(e) => {
+                    if (e.target.value) setBulkDeptValue(e.target.value);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer mb-2"
+                >
+                  <option value="">-- Seleccionar departamento existente o escribir abajo --</option>
+                  {departments.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+
+                <label className="font-bold text-slate-800 block mb-1.5">Nombre del Departamento *</label>
+                <input
+                  type="text"
+                  value={bulkDeptValue}
+                  onChange={(e) => setBulkDeptValue(e.target.value)}
+                  placeholder="Ej. Tecnologías de Información o Operaciones Marítimas"
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkDeptModal(false)}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkDept}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl bg-cyan-700 hover:bg-cyan-800 text-white font-bold cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Briefcase className="w-4 h-4" />
+                  <span>{isBulkExecuting ? 'Guardando...' : `Actualizar ${selectedEmployeeIds.size} Colaboradores`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Modal */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-rose-900 text-white flex items-center justify-between">
+              <div>
+                <p className="text-xs text-rose-200 font-mono font-bold uppercase">Baja y Eliminación Masiva</p>
+                <h3 className="font-bold text-base text-white">Eliminar {selectedEmployeeIds.size} Colaboradores</h3>
+              </div>
+              <button onClick={() => setShowBulkDeleteModal(false)} className="text-rose-200 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs sm:text-sm">
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-xs space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Validación de Integridad y Custodia TI</span>
+                </p>
+                <p>
+                  Estás a punto de eliminar a <strong>{selectedEmployeeIds.size}</strong> colaboradores del directorio institucional.
+                </p>
+                <p className="text-slate-700 font-medium pt-1">
+                  El sistema validará automáticamente que los colaboradores no tengan <strong>activos de hardware en resguardo</strong> ni <strong>préstamos temporales activos</strong>. Aquellos con custodias pendientes serán bloqueados para proteger el registro institucional.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkDelete}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{isBulkExecuting ? 'Validando y Eliminando...' : `Confirmar Baja de ${selectedEmployeeIds.size}`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CSV Import Modal */}
       {showImportModal && (

@@ -14,7 +14,8 @@ import {
   EquipmentLoan, 
   DeviceCommand, 
   DeviceCommandType, 
-  PhysicalCondition 
+  PhysicalCondition,
+  Company 
 } from '../types/inventory';
 import { 
   INITIAL_ASSETS, 
@@ -26,7 +27,8 @@ import {
   INITIAL_TIMELINE, 
   INITIAL_EMAIL_LOGS, 
   SYSTEM_USERS, 
-  INITIAL_LOANS 
+  INITIAL_LOANS,
+  INITIAL_COMPANIES 
 } from '../data/mockData';
 import { getDefaultPermissionsForRole } from '../utils/permissionHelpers';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -118,6 +120,19 @@ interface InventoryContextType {
   updateBranch: (id: string, updates: Partial<Branch>) => void;
   deleteBranch: (id: string) => { success: boolean; error?: string };
 
+  // Companies (Menú de Empresas: ID y Nombre Obligatorios)
+  companies: Company[];
+  addCompany: (company: Company) => { success: boolean; error?: string };
+  updateCompany: (id: string, updates: Partial<Company>) => { success: boolean; error?: string };
+  deleteCompany: (id: string) => { success: boolean; error?: string };
+
+  // Bulk Actions (Acciones Masivas en Inventario y Colaboradores)
+  bulkUpdateAssets: (ids: string[], updates: Partial<HardwareAsset>) => Promise<number>;
+  bulkDeleteAssets: (ids: string[]) => Promise<{ count: number; error?: string }>;
+  bulkRetireAssets: (ids: string[], reason: string) => Promise<number>;
+  bulkUpdateEmployees: (ids: string[], updates: Partial<Employee>) => Promise<number>;
+  bulkDeleteEmployees: (ids: string[]) => Promise<{ successCount: number; blockedCount: number; blockedEmployees: string[] }>;
+
   // Equipment Loans (Préstamos Temporales)
   loans: EquipmentLoan[];
   createLoan: (loanData: {
@@ -180,6 +195,7 @@ const STORAGE_KEYS = {
   AUTH_SESSION: 'itasset_auth_session_v1',
   SYSTEM_USERS: 'itasset_system_users_v1',
   LOANS: 'itasset_loans_v1',
+  COMPANIES: 'itasset_companies_v1'
 };
 
 export function safeLocalStorageSetItem(key: string, value: string): void {
@@ -260,6 +276,20 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [loans, setLoans] = useState<EquipmentLoan[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.LOANS);
     return saved ? JSON.parse(saved) : INITIAL_LOANS;
+  });
+
+  // Dedicated companies catalog for Grupo Petroil (ID and Name required)
+  const [companies, setCompanies] = useState<Company[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.COMPANIES);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        // fallback
+      }
+    }
+    return INITIAL_COMPANIES;
   });
 
   // Dynamic system users with permissions and active status
@@ -609,6 +639,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const deletedUserIdsRef = useRef<Set<string>>(new Set());
   const deletedAssetIdsRef = useRef<Set<string>>(new Set());
   const deletedEmployeeIdsRef = useRef<Set<string>>(new Set());
+  const deletedCompanyIdsRef = useRef<Set<string>>(new Set());
 
   // Initialize Firestore collections & real-time synchronization
   useEffect(() => {
@@ -717,6 +748,22 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     }, (err) => console.warn('[Firestore] Error en listener de system users:', err?.message));
 
+    const unsubCompanies = onSnapshot(collection(firestoreDb, COLLECTIONS.COMPANIES), (snap) => {
+      if (!snap.empty) {
+        const remoteCompanies = snap.docs.map(d => d.data() as Company);
+        setCompanies(prev => {
+          const remoteMap = new Map(remoteCompanies.map(c => [c.id, c]));
+          const merged = [...remoteCompanies];
+          prev.forEach(localComp => {
+            if (!remoteMap.has(localComp.id) && !deletedCompanyIdsRef.current.has(localComp.id)) {
+              merged.unshift(localComp);
+            }
+          });
+          return merged;
+        });
+      }
+    }, (err) => console.warn('[Firestore] Error en listener de companies:', err?.message));
+
     return () => {
       unsubAssets();
       unsubEmployees();
@@ -728,6 +775,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       unsubEmailLogs();
       unsubLoans();
       unsubUsers();
+      unsubCompanies();
     };
   }, []);
 
@@ -753,7 +801,8 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     safeLocalStorageSetItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
     safeLocalStorageSetItem(STORAGE_KEYS.SYSTEM_USERS, JSON.stringify(systemUsers));
     safeLocalStorageSetItem(STORAGE_KEYS.LOANS, JSON.stringify(loans));
-  }, [assets, employees, assignments, maintenanceRecords, branches, transfers, timeline, emailLogs, currentUser, systemUsers, loans]);
+    safeLocalStorageSetItem(STORAGE_KEYS.COMPANIES, JSON.stringify(companies));
+  }, [assets, employees, assignments, maintenanceRecords, branches, transfers, timeline, emailLogs, currentUser, systemUsers, loans, companies]);
 
   const triggerCloudSyncAnimation = () => {
     setIsCloudSyncing(true);
@@ -775,7 +824,8 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         saveBatchToFirestore(COLLECTIONS.TRANSFERS, transfers.map(t => ({ id: t.id, data: t }))),
         saveBatchToFirestore(COLLECTIONS.MAINTENANCE, maintenanceRecords.map(m => ({ id: m.id, data: m }))),
         saveBatchToFirestore(COLLECTIONS.LOANS, loans.map(l => ({ id: l.id, data: l }))),
-        saveBatchToFirestore(COLLECTIONS.SYSTEM_USERS, systemUsers.map(u => ({ id: u.id, data: u })))
+        saveBatchToFirestore(COLLECTIONS.SYSTEM_USERS, systemUsers.map(u => ({ id: u.id, data: u }))),
+        saveBatchToFirestore(COLLECTIONS.COMPANIES, companies.map(c => ({ id: c.id, data: c })))
       ]);
       setLastCloudSyncTime(new Date().toLocaleTimeString());
     } catch (syncErr) {
@@ -1476,6 +1526,285 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   // ==========================================
+  // EMPRESAS / FILIALES (ID Y NOMBRE OBLIGATORIOS)
+  // ==========================================
+  const addCompany = (companyData: Company): { success: boolean; error?: string } => {
+    const cleanId = (companyData.id || '').trim().toUpperCase();
+    const cleanName = (companyData.name || '').trim();
+
+    if (!cleanId) {
+      return { success: false, error: 'El ID de la empresa es obligatorio (ej. PETROIL-CORP).' };
+    }
+    if (!cleanName) {
+      return { success: false, error: 'El Nombre de la empresa es obligatorio.' };
+    }
+
+    const exists = companies.some(c => c.id.toLowerCase() === cleanId.toLowerCase());
+    if (exists) {
+      return { success: false, error: `Ya existe una empresa registrada con el identificador "${cleanId}".` };
+    }
+
+    const newCompany: Company = {
+      ...companyData,
+      id: cleanId,
+      name: cleanName,
+      status: companyData.status || 'activa',
+      createdAt: companyData.createdAt || new Date().toISOString().split('T')[0]
+    };
+
+    setCompanies(prev => [newCompany, ...prev.filter(c => c.id !== cleanId)]);
+    saveDocumentToFirestore(COLLECTIONS.COMPANIES, cleanId, newCompany).then(res => {
+      if (!res.success) {
+        console.error('[Firestore] Error guardando empresa:', res.error);
+      }
+    });
+
+    logEvent({
+      assetId: 'company-alta',
+      type: 'alta',
+      title: `Registro de Empresa / Filial: ${newCompany.name}`,
+      description: `Se registró la entidad institucional con ID: ${newCompany.id} y Razón Social: ${newCompany.businessName || cleanName} en Google Cloud Firestore.`,
+      author: currentUser.name
+    });
+
+    triggerCloudSyncAnimation();
+    return { success: true };
+  };
+
+  const updateCompany = (id: string, updates: Partial<Company>): { success: boolean; error?: string } => {
+    let updatedComp: Company | undefined;
+    if (updates.name !== undefined && !updates.name.trim()) {
+      return { success: false, error: 'El nombre de la empresa no puede estar en blanco.' };
+    }
+
+    setCompanies(prev => prev.map(c => {
+      if (c.id === id) {
+        updatedComp = {
+          ...c,
+          ...updates,
+          id: c.id, // ID remains immutable
+          name: updates.name ? updates.name.trim() : c.name
+        };
+        return updatedComp;
+      }
+      return c;
+    }));
+
+    if (updatedComp) {
+      saveDocumentToFirestore(COLLECTIONS.COMPANIES, id, updatedComp);
+      logEvent({
+        assetId: 'company-update',
+        type: 'actualizacion',
+        title: `Actualización de Empresa: ${updatedComp.name}`,
+        description: `Se actualizaron los datos institucionales de la empresa con ID: ${id}.`,
+        author: currentUser.name
+      });
+      triggerCloudSyncAnimation();
+      return { success: true };
+    }
+    return { success: false, error: 'Empresa no encontrada.' };
+  };
+
+  const deleteCompany = (id: string): { success: boolean; error?: string } => {
+    const comp = companies.find(c => c.id === id);
+    if (!comp) {
+      return { success: false, error: 'Empresa no encontrada.' };
+    }
+
+    if (companies.length <= 1) {
+      return { success: false, error: 'El sistema debe conservar al menos una empresa registrada.' };
+    }
+
+    const linkedBranches = branches.filter(b => b.companyId === id);
+    if (linkedBranches.length > 0) {
+      return { 
+        success: false, 
+        error: `No es posible eliminar "${comp.name}": tiene ${linkedBranches.length} sucursal(es) vinculadas (${linkedBranches.map(b => b.name).join(', ')}). Reasigne las sucursales primero.` 
+      };
+    }
+
+    deletedCompanyIdsRef.current.add(id);
+    deleteDocumentFromFirestore(COLLECTIONS.COMPANIES, id);
+    setCompanies(prev => prev.filter(c => c.id !== id));
+
+    logEvent({
+      assetId: 'company-baja',
+      type: 'baja',
+      title: `Baja de Empresa / Filial: ${comp.name}`,
+      description: `Se eliminó del catálogo corporativo la empresa con ID ${id} (${comp.name}) en Firestore.`,
+      author: currentUser.name
+    });
+
+    triggerCloudSyncAnimation();
+    return { success: true };
+  };
+
+  // ==========================================
+  // BULK ACTIONS (ACCIONES MASIVAS EN LOTE)
+  // ==========================================
+  const bulkUpdateAssets = async (ids: string[], updates: Partial<HardwareAsset>): Promise<number> => {
+    if (!ids || ids.length === 0) return 0;
+    const idsSet = new Set(ids);
+    const updatedItems: HardwareAsset[] = [];
+
+    setAssets(prev => prev.map(a => {
+      if (idsSet.has(a.id)) {
+        const updated = { ...a, ...updates };
+        updatedItems.push(updated);
+        return updated;
+      }
+      return a;
+    }));
+
+    await saveBatchToFirestore(
+      COLLECTIONS.ASSETS,
+      updatedItems.map(item => ({ id: item.id, data: item }))
+    );
+
+    logEvent({
+      assetId: 'bulk-asset-update',
+      type: 'actualizacion',
+      title: `Actualización Masiva de ${updatedItems.length} Equipos`,
+      description: `Se aplicaron modificaciones en lote a ${updatedItems.length} activos en Google Cloud Firestore.`,
+      author: currentUser.name
+    });
+
+    triggerCloudSyncAnimation();
+    return updatedItems.length;
+  };
+
+  const bulkDeleteAssets = async (ids: string[]): Promise<{ count: number; error?: string }> => {
+    if (!ids || ids.length === 0) return { count: 0 };
+    ids.forEach(id => deletedAssetIdsRef.current.add(id));
+    const idsSet = new Set(ids);
+
+    setAssets(prev => prev.filter(a => !idsSet.has(a.id)));
+    for (const id of ids) {
+      deleteDocumentFromFirestore(COLLECTIONS.ASSETS, id);
+    }
+
+    logEvent({
+      assetId: 'bulk-asset-delete',
+      type: 'baja',
+      title: `Eliminación Masiva de ${ids.length} Equipos`,
+      description: `Se removieron ${ids.length} activos del catálogo de inventario en Firestore.`,
+      author: currentUser.name
+    });
+
+    triggerCloudSyncAnimation();
+    return { count: ids.length };
+  };
+
+  const bulkRetireAssets = async (ids: string[], reason: string): Promise<number> => {
+    if (!ids || ids.length === 0) return 0;
+    const idsSet = new Set(ids);
+    const updatedItems: HardwareAsset[] = [];
+
+    setAssets(prev => prev.map(a => {
+      if (idsSet.has(a.id)) {
+        const updated: HardwareAsset = {
+          ...a,
+          status: 'baja',
+          notes: `${a.notes || ''} [Baja masiva: ${reason}]`
+        };
+        updatedItems.push(updated);
+        return updated;
+      }
+      return a;
+    }));
+
+    await saveBatchToFirestore(
+      COLLECTIONS.ASSETS,
+      updatedItems.map(item => ({ id: item.id, data: item }))
+    );
+
+    logEvent({
+      assetId: 'bulk-asset-retire',
+      type: 'baja',
+      title: `Baja Formal Masiva de ${updatedItems.length} Equipos`,
+      description: `Se aplicó baja técnica a ${updatedItems.length} activos. Motivo: ${reason}`,
+      author: currentUser.name
+    });
+
+    triggerCloudSyncAnimation();
+    return updatedItems.length;
+  };
+
+  const bulkUpdateEmployees = async (ids: string[], updates: Partial<Employee>): Promise<number> => {
+    if (!ids || ids.length === 0) return 0;
+    const idsSet = new Set(ids);
+    const updatedItems: Employee[] = [];
+
+    setEmployees(prev => prev.map(e => {
+      if (idsSet.has(e.id)) {
+        const updated = { ...e, ...updates };
+        updatedItems.push(updated);
+        return updated;
+      }
+      return e;
+    }));
+
+    await saveBatchToFirestore(
+      COLLECTIONS.EMPLOYEES,
+      updatedItems.map(item => ({ id: item.id, data: item }))
+    );
+
+    logEvent({
+      assetId: 'bulk-employee-update',
+      type: 'actualizacion',
+      title: `Actualización Masiva de ${updatedItems.length} Colaboradores`,
+      description: `Se modificaron registros en lote para ${updatedItems.length} colaboradores en Firestore.`,
+      author: currentUser.name
+    });
+
+    triggerCloudSyncAnimation();
+    return updatedItems.length;
+  };
+
+  const bulkDeleteEmployees = async (ids: string[]): Promise<{ successCount: number; blockedCount: number; blockedEmployees: string[] }> => {
+    if (!ids || ids.length === 0) return { successCount: 0, blockedCount: 0, blockedEmployees: [] };
+    const toDelete: string[] = [];
+    const blocked: string[] = [];
+
+    for (const id of ids) {
+      const emp = employees.find(e => e.id === id);
+      const name = emp ? `${emp.fullName} (${emp.employeeNumber})` : id;
+      const assigned = assets.filter(a => a.assignedToEmployeeId === id && a.status === 'asignado');
+      const loansActive = loans.filter(l => l.employeeId === id && l.status === 'activo');
+
+      if (assigned.length > 0 || loansActive.length > 0) {
+        blocked.push(`${name} [Equipos asignados: ${assigned.length}, Préstamos: ${loansActive.length}]`);
+      } else {
+        toDelete.push(id);
+      }
+    }
+
+    if (toDelete.length > 0) {
+      toDelete.forEach(id => deletedEmployeeIdsRef.current.add(id));
+      const deleteSet = new Set(toDelete);
+      setEmployees(prev => prev.filter(e => !deleteSet.has(e.id)));
+      for (const id of toDelete) {
+        deleteDocumentFromFirestore(COLLECTIONS.EMPLOYEES, id);
+      }
+
+      logEvent({
+        assetId: 'bulk-employee-delete',
+        type: 'baja',
+        title: `Baja Masiva de ${toDelete.length} Colaboradores`,
+        description: `Se dieron de baja ${toDelete.length} colaboradores sin custodia de equipos activa.`,
+        author: currentUser.name
+      });
+      triggerCloudSyncAnimation();
+    }
+
+    return {
+      successCount: toDelete.length,
+      blockedCount: blocked.length,
+      blockedEmployees: blocked
+    };
+  };
+
+  // ==========================================
   // EQUIPMENT LOANS (PRÉSTAMOS TEMPORALES)
   // ==========================================
   const createLoan = (loanData: {
@@ -1899,6 +2228,15 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         simulateCommandExecution,
         fetchDeviceCommands,
         logEvent,
+        companies,
+        addCompany,
+        updateCompany,
+        deleteCompany,
+        bulkUpdateAssets,
+        bulkDeleteAssets,
+        bulkRetireAssets,
+        bulkUpdateEmployees,
+        bulkDeleteEmployees,
         exportDataJSON,
         importDataJSON,
         resetToDefaults,

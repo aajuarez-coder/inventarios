@@ -16,7 +16,8 @@ import {
   MapPin,
   Terminal,
   BookOpen,
-  Repeat
+  Repeat,
+  Building2
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
 import { getWarrantyStatus, getMaintenanceStatus } from '../utils/formatters';
@@ -29,6 +30,7 @@ export type TabId =
   | 'loans'
   | 'maintenance'
   | 'branches'
+  | 'companies'
   | 'geolocation'
   | 'agent-installation'
   | 'notifications'
@@ -43,7 +45,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => {
-  const { assets, assignments, loans, maintenanceRecords, transfers, currentUser, systemUsers, logout } = useInventory();
+  const { assets, assignments, loans, maintenanceRecords, transfers, currentUser, systemUsers, companies, logout } = useInventory();
 
   // Badges
   const pendingSignatures = assignments.filter(a => !a.employeeSignatureUrl).length;
@@ -75,6 +77,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
       label: 'Colaboradores',
       icon: Users,
       description: 'Personal y equipos en custodia'
+    },
+    {
+      id: 'companies' as TabId,
+      label: 'Empresas & Filiales',
+      icon: Building2,
+      count: companies?.length || 0,
+      description: 'Grupo Petroil y filiales'
     },
     {
       id: 'assignments' as TabId,

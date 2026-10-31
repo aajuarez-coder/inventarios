@@ -109,10 +109,27 @@ export interface MaintenanceRecord {
   emailNotifiedAt?: string;
 }
 
+export interface Company {
+  id: string; // OBLIGATORIO: Identificador de la empresa/filial
+  name: string; // OBLIGATORIO: Nombre de la empresa
+  businessName?: string; // Razón social (ej: "Petroil Combustibles S.A. de C.V.")
+  rfc?: string; // RFC fiscal
+  sector?: string; // División / Sector de actividad
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  status: 'activa' | 'inactiva';
+  createdAt: string;
+  notes?: string;
+}
+
 export interface Branch {
   id: string;
   code: string;
   name: string;
+  companyId?: string;
   city: string;
   state: string;
   address: string;

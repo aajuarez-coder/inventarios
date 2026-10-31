@@ -21,7 +21,8 @@ import {
   TimelineEvent, 
   EmailNotification,
   AppUser,
-  EquipmentLoan 
+  EquipmentLoan,
+  Company 
 } from '../types/inventory';
 import { 
   INITIAL_ASSETS, 
@@ -33,7 +34,8 @@ import {
   INITIAL_TIMELINE, 
   INITIAL_EMAIL_LOGS,
   SYSTEM_USERS,
-  INITIAL_LOANS 
+  INITIAL_LOANS,
+  INITIAL_COMPANIES 
 } from '../data/mockData';
 
 // Re-use or initialize Firebase app
@@ -69,7 +71,8 @@ export const COLLECTIONS = {
   EMAIL_LOGS: 'emailLogs',
   LOANS: 'loans',
   SYSTEM_USERS: 'systemUsers',
-  DEVICE_COMMANDS: 'deviceCommands'
+  DEVICE_COMMANDS: 'deviceCommands',
+  COMPANIES: 'companies'
 } as const;
 
 /**
@@ -103,7 +106,7 @@ export function sanitizeForFirestore<T>(data: T): T {
 
 /**
  * Seeds initial collection documents if Firestore is initially empty,
- * and ensures essential system users exist in Firestore.
+ * and ensures essential system users and companies exist in Firestore.
  */
 export async function seedInitialFirestoreDataIfEmpty() {
   try {
@@ -133,6 +136,23 @@ export async function seedInitialFirestoreDataIfEmpty() {
       } catch (userCheckErr) {
         console.warn('[Firestore] Verificación de usuarios existentes omitida:', userCheckErr);
       }
+
+      // Ensure companies collection is populated if empty
+      try {
+        const compSnap = await getDocs(collection(firestoreDb, COLLECTIONS.COMPANIES));
+        if (compSnap.empty) {
+          console.log('[Firestore] Inicializando catálogo de Empresas de Grupo Petroil en Firestore...');
+          const compBatch = writeBatch(firestoreDb);
+          INITIAL_COMPANIES.forEach(comp => {
+            compBatch.set(doc(firestoreDb, COLLECTIONS.COMPANIES, comp.id), sanitizeForFirestore(comp), { merge: true });
+          });
+          await compBatch.commit();
+          console.log('[Firestore] Catálogo de Empresas sincronizado con éxito.');
+        }
+      } catch (compCheckErr) {
+        console.warn('[Firestore] Verificación de empresas omitida:', compCheckErr);
+      }
+
       return;
     }
 

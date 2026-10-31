@@ -18,6 +18,7 @@ import { GeolocationModule } from './components/GeolocationModule';
 import { AgentInstallation } from './components/AgentInstallation';
 import { UserManual } from './components/UserManual';
 import { EquipmentLoansManager } from './components/EquipmentLoansManager';
+import { CompaniesManager } from './components/CompaniesManager';
 import { HardwareAsset, Employee } from './types/inventory';
 import { 
   Laptop, 
@@ -36,7 +37,8 @@ import {
   MapPin,
   Terminal,
   BookOpen,
-  Repeat
+  Repeat,
+  Building2
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -108,6 +110,7 @@ const AppContent: React.FC = () => {
     { id: 'dashboard' as TabId, label: 'Inicio', icon: LayoutDashboard },
     { id: 'inventory' as TabId, label: 'Equipos', icon: Laptop },
     { id: 'employees' as TabId, label: 'Personal', icon: Users },
+    { id: 'companies' as TabId, label: 'Empresas', icon: Building2 },
     { id: 'assignments' as TabId, label: 'Responsivas', icon: FileText },
     { id: 'loans' as TabId, label: 'Préstamos', icon: Repeat },
     { id: 'maintenance' as TabId, label: 'Servicio', icon: Wrench },
@@ -264,6 +267,10 @@ const AppContent: React.FC = () => {
             <MaintenanceSchedule
               preselectedAsset={preselectedAsset}
             />
+          )}
+
+          {currentTab === 'companies' && (
+            <CompaniesManager />
           )}
 
           {currentTab === 'branches' && (

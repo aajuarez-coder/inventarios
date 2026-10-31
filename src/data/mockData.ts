@@ -8,7 +8,8 @@ import {
   TimelineEvent, 
   EmailNotification,
   AppUser,
-  EquipmentLoan
+  EquipmentLoan,
+  Company
 } from '../types/inventory';
 
 export const INITIAL_BRANCHES: Branch[] = [
@@ -991,6 +992,99 @@ export const INITIAL_LOANS: EquipmentLoan[] = [
     technicianOutName: 'Mateo Cárdenas',
     technicianInName: 'Mateo Cárdenas',
     createdAt: '2026-10-01T08:00:00Z'
+  }
+];
+
+export const INITIAL_COMPANIES: Company[] = [
+  {
+    id: 'COMP-PETROIL-CORP',
+    name: 'Grupo Petroil',
+    businessName: 'Grupo Petroil S.A. de C.V.',
+    rfc: 'GPE100412AA1',
+    sector: 'Corporativo & Dirección General',
+    phone: '+52 (55) 5123-4567',
+    email: 'contacto@petroil.com.mx',
+    address: 'Av. Paseo de la Reforma 250, Piso 14',
+    city: 'Ciudad de México',
+    state: 'CDMX',
+    status: 'activa',
+    createdAt: '2024-01-15',
+    notes: 'Matriz y oficinas corporativas centrales de Grupo Petroil.'
+  },
+  {
+    id: 'COMP-REDPETROIL',
+    name: 'Redpetroil Estaciones',
+    businessName: 'Redpetroil Estaciones de Servicio S.A. de C.V.',
+    rfc: 'RES120820BC2',
+    sector: 'Combustibles & Retail Gasolinero',
+    phone: '+52 (669) 989-1200',
+    email: 'estaciones@redpetroil.com.mx',
+    address: 'Calzada Gabriel Leyva 2100',
+    city: 'Mazatlán',
+    state: 'Sinaloa',
+    status: 'activa',
+    createdAt: '2024-02-10',
+    notes: 'Red integral de estaciones de servicio automotriz y tiendas de conveniencia.'
+  },
+  {
+    id: 'COMP-PETROIL-COMB',
+    name: 'Petroil Combustibles',
+    businessName: 'Petroil Distribución y Combustibles S.A. de C.V.',
+    rfc: 'PDC140305DE3',
+    sector: 'Distribución Mayorista de Hidrocarburos',
+    phone: '+52 (81) 8356-9000',
+    email: 'combustibles@petroil.com.mx',
+    address: 'Av. Fundidora 501, Parque Industrial',
+    city: 'Monterrey',
+    state: 'Nuevo León',
+    status: 'activa',
+    createdAt: '2024-03-01',
+    notes: 'Suministro y distribución mayorista diésel industrial, gasolinas y turbosina.'
+  },
+  {
+    id: 'COMP-PETROIL-LUB',
+    name: 'Petroil Lubricantes',
+    businessName: 'Especialidades Petroquímicas y Lubricantes Petroil S.A. de C.V.',
+    rfc: 'EPL160914GH4',
+    sector: 'Lubricantes & Fluidos Industriales',
+    phone: '+52 (33) 3812-7800',
+    email: 'lubricantes@petroil.com.mx',
+    address: 'Anillo Periférico Sur 4100',
+    city: 'Guadalajara',
+    state: 'Jalisco',
+    status: 'activa',
+    createdAt: '2024-04-12',
+    notes: 'Fabricación y comercialización de lubricantes de alto rendimiento para flotas y maquinaria pesada.'
+  },
+  {
+    id: 'COMP-PETROIL-LOG',
+    name: 'Transportes Petroil',
+    businessName: 'Logística y Flota Terrestre Petroil S.A. de C.V.',
+    rfc: 'LTP181123JK5',
+    sector: 'Transporte & Logística de Carga Peligrosa',
+    phone: '+52 (664) 624-9100',
+    email: 'logistica@petroil.com.mx',
+    address: 'Boulevard Industrial 1920',
+    city: 'Tijuana',
+    state: 'Baja California',
+    status: 'activa',
+    createdAt: '2024-05-20',
+    notes: 'Operador logístico de autotanques y transporte federal especializado.'
+  },
+  {
+    id: 'COMP-PETROIL-GAS',
+    name: 'Petroil Gas LP',
+    businessName: 'Distribuidora de Gas Licuado Petroil S.A. de C.V.',
+    rfc: 'DGL190518LM6',
+    sector: 'Gas LP Residencial & Comercial',
+    phone: '+52 (662) 214-3300',
+    email: 'gas@petroil.com.mx',
+    address: 'Carretera a Sahuaripa Km 4.5',
+    city: 'Hermosillo',
+    state: 'Sonora',
+    status: 'activa',
+    createdAt: '2024-06-05',
+    notes: 'Suministro y cilindrado de gas LP para sector residencial e industrial.'
   }
 ];
 
