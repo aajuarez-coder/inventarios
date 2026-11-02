@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useInventory } from '../context/InventoryContext';
 import { Branch, Transfer, HardwareAsset } from '../types/inventory';
 import { 
@@ -18,7 +18,8 @@ import {
   Edit3,
   Trash2,
   AlertTriangle,
-  Check
+  Check,
+  Printer
 } from 'lucide-react';
 import { formatDate } from '../utils/formatters';
 
@@ -36,6 +37,7 @@ export const BranchesAndTransfers: React.FC<BranchesAndTransfersProps> = ({
     transfers, 
     assets, 
     employees,
+    companies,
     createTransfer, 
     confirmTransferArrival, 
     addBranch, 
@@ -70,16 +72,56 @@ export const BranchesAndTransfers: React.FC<BranchesAndTransfersProps> = ({
     longitude: -99.1677
   });
 
+  const [selectedTransferForView, setSelectedTransferForView] = useState<Transfer | null>(null);
+
   // Transfer form
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>(
     preselectedAsset ? [preselectedAsset.id] : []
   );
   const [sourceBranchId, setSourceBranchId] = useState(preselectedAsset?.branchId || branches[0]?.id || '');
-  const [targetBranchId, setTargetBranchId] = useState(branches[1]?.id || '');
+  const [targetBranchId, setTargetBranchId] = useState(
+    branches.find(b => b.id !== (preselectedAsset?.branchId || branches[0]?.id))?.id || branches[1]?.id || ''
+  );
   const [carrier, setCarrier] = useState('Estafeta Express Terrestre');
   const [trackingNumber, setTrackingNumber] = useState(`EST-${Math.floor(100000000 + Math.random() * 900000000)}-MX`);
   const [estimatedArrival, setEstimatedArrival] = useState('2026-10-21');
   const [transferNotes, setTransferNotes] = useState('Traslado de equipo embalado con protección anti-impacto.');
+
+  // Ensure sourceBranchId and targetBranchId always point to valid registered branches dadas de alta
+  useEffect(() => {
+    if (branches.length > 0) {
+      if (!sourceBranchId || !branches.some(b => b.id === sourceBranchId)) {
+        const initialSrc = preselectedAsset?.branchId && branches.some(b => b.id === preselectedAsset.branchId)
+          ? preselectedAsset.branchId
+          : branches[0]?.id || '';
+        setSourceBranchId(initialSrc);
+      }
+      if (!targetBranchId || !branches.some(b => b.id === targetBranchId) || (targetBranchId === sourceBranchId && branches.length > 1)) {
+        const nextTarget = branches.find(b => b.id !== sourceBranchId) || branches[0];
+        if (nextTarget && nextTarget.id !== targetBranchId) {
+          setTargetBranchId(nextTarget.id);
+        }
+      }
+    }
+  }, [branches, preselectedAsset, sourceBranchId]);
+
+  const sourceBranch = branches.find(b => b.id === sourceBranchId);
+  const targetBranch = branches.find(b => b.id === targetBranchId);
+
+  const handleOpenNewTransferModal = () => {
+    const initialSrc = preselectedAsset?.branchId && branches.some(b => b.id === preselectedAsset.branchId)
+      ? preselectedAsset.branchId
+      : (sourceBranchId && branches.some(b => b.id === sourceBranchId) ? sourceBranchId : branches[0]?.id || '');
+    setSourceBranchId(initialSrc);
+    const initialDst = branches.find(b => b.id !== initialSrc)?.id || branches[1]?.id || '';
+    setTargetBranchId(initialDst);
+    if (preselectedAsset) {
+      setSelectedAssetIds([preselectedAsset.id]);
+    } else {
+      setSelectedAssetIds([]);
+    }
+    setShowNewTransferModal(true);
+  };
 
   // Branch form
   const [newBranchForm, setNewBranchForm] = useState({
@@ -216,8 +258,8 @@ export const BranchesAndTransfers: React.FC<BranchesAndTransfersProps> = ({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowNewTransferModal(true)}
-            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-sm shadow-indigo-200 flex items-center gap-2"
+            onClick={handleOpenNewTransferModal}
+            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors shadow-sm shadow-indigo-200 flex items-center gap-2 cursor-pointer"
           >
             <Truck className="w-4 h-4" />
             Despachar Traslado
@@ -345,18 +387,26 @@ export const BranchesAndTransfers: React.FC<BranchesAndTransfersProps> = ({
                     </div>
                   </div>
 
-                  {/* Action */}
-                  {isInFlight && (
-                    <div className="pt-2">
+                  {/* Actions */}
+                  <div className="pt-2 flex flex-col sm:flex-row items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTransferForView(trf)}
+                      className="w-full sm:flex-1 py-2 px-3 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-[#004a99]" />
+                      Ver Ficha de Traslado
+                    </button>
+                    {isInFlight && (
                       <button
                         onClick={() => setReceivingTransfer(trf)}
-                        className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+                        className="w-full sm:flex-1 py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        Confirmar Arribo a Almacén Destino
+                        Confirmar Arribo
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                 </div>
               );
@@ -451,87 +501,210 @@ export const BranchesAndTransfers: React.FC<BranchesAndTransfersProps> = ({
         </div>
       )}
 
-      {/* New Transfer Modal */}
+      {/* Ficha de Traslado - Modal de Nuevo Traslado entre Sucursales */}
       {showNewTransferModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95">
             <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Truck className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-bold text-sm">Nuevo Traslado de Equipos entre Sucursales</h3>
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
+                  <Truck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Ficha de Traslado de Equipos entre Sucursales</h3>
+                  <p className="text-[11px] text-slate-400">Seleccione la sucursal origen y sucursal destino dadas de alta en el sistema</p>
+                </div>
               </div>
-              <button onClick={() => setShowNewTransferModal(false)} className="text-slate-400 hover:text-white">
+              <button 
+                onClick={() => setShowNewTransferModal(false)} 
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateTransferSubmit} className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCreateTransferSubmit} className="p-6 overflow-y-auto space-y-4 text-xs">
+              {/* Origin & Destination Branch Selectors with Registered Branches */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Sucursal Origen */}
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Sucursal Origen *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-800 text-xs sm:text-[13px] flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 text-[#004a99]" />
+                      <span>Sucursal Origen *</span>
+                    </label>
+                    <span className="text-[10px] text-slate-700 font-bold bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                      {branches.length} dadas de alta
+                    </span>
+                  </div>
+                  
                   <select
+                    required
                     value={sourceBranchId}
-                    onChange={(e) => setSourceBranchId(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                    onChange={(e) => {
+                      const newSrc = e.target.value;
+                      setSourceBranchId(newSrc);
+                      setSelectedAssetIds([]);
+                      if (targetBranchId === newSrc) {
+                        const nextDst = branches.find(b => b.id !== newSrc);
+                        if (nextDst) setTargetBranchId(nextDst.id);
+                      }
+                    }}
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-semibold text-xs focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer shadow-2xs"
                   >
-                    {branches.map(b => (
-                      <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
-                    ))}
+                    <option value="">-- Seleccionar Sucursal Origen ({branches.length} disponibles) --</option>
+                    {branches.map(b => {
+                      const comp = companies?.find(c => c.id === b.companyId);
+                      return (
+                        <option key={b.id} value={b.id}>
+                          {b.code ? `[${b.code}] ` : ''}{b.name} — {b.city}{b.state ? `, ${b.state}` : ''} {comp ? `(${comp.name})` : ''} {b.isMainWarehouse ? '★ [Almacén Central]' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
+
+                  {/* Detalle de Sucursal Origen seleccionada */}
+                  {sourceBranch ? (
+                    <div className="mt-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1 animate-in fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900">{sourceBranch.name}</span>
+                        {sourceBranch.code && (
+                          <span className="font-mono text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-bold">
+                            {sourceBranch.code}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-600 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                        <span>{sourceBranch.address || `${sourceBranch.city}, ${sourceBranch.state}`}</span>
+                      </p>
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                        <span>Encargado: <strong className="text-slate-800">{sourceBranch.managerName || 'No asignado'}</strong></span>
+                        {sourceBranch.phone && <span>Tel: {sourceBranch.phone}</span>}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-amber-600 mt-1 font-medium">
+                      * Seleccione una sucursal dada de alta como punto de partida
+                    </p>
+                  )}
                 </div>
+
+                {/* Sucursal Destino */}
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Sucursal Destino *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-800 text-xs sm:text-[13px] flex items-center gap-1.5">
+                      <Truck className="w-4 h-4 text-emerald-600" />
+                      <span>Sucursal Destino *</span>
+                    </label>
+                    <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Recepción de equipos
+                    </span>
+                  </div>
+
                   <select
+                    required
                     value={targetBranchId}
                     onChange={(e) => setTargetBranchId(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-hidden"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 font-semibold text-xs focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer shadow-2xs"
                   >
-                    {branches.map(b => (
-                      <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
-                    ))}
+                    <option value="">-- Seleccionar Sucursal Destino ({branches.length} disponibles) --</option>
+                    {branches.map(b => {
+                      const isSource = b.id === sourceBranchId;
+                      const comp = companies?.find(c => c.id === b.companyId);
+                      return (
+                        <option key={b.id} value={b.id} disabled={isSource}>
+                          {b.code ? `[${b.code}] ` : ''}{b.name} — {b.city}{b.state ? `, ${b.state}` : ''} {comp ? `(${comp.name})` : ''} {b.isMainWarehouse ? '★ [Almacén Central]' : ''} {isSource ? '(⚠️ Origen seleccionado)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
+
+                  {/* Detalle de Sucursal Destino seleccionada */}
+                  {targetBranch ? (
+                    <div className="mt-2 p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs text-slate-700 space-y-1 animate-in fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-emerald-950">{targetBranch.name}</span>
+                        {targetBranch.code && (
+                          <span className="font-mono text-[10px] bg-emerald-200/80 text-emerald-900 px-1.5 py-0.5 rounded font-bold">
+                            {targetBranch.code}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-emerald-800 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>{targetBranch.address || `${targetBranch.city}, ${targetBranch.state}`}</span>
+                      </p>
+                      <div className="flex items-center justify-between text-[11px] text-emerald-800 pt-1 border-t border-emerald-200/60">
+                        <span>Receptor: <strong className="text-emerald-950">{targetBranch.managerName || 'Encargado Sede'}</strong></span>
+                        {targetBranch.phone && <span>Tel: {targetBranch.phone}</span>}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-amber-600 mt-1 font-medium">
+                      * Seleccione una sucursal dada de alta como destino final
+                    </p>
+                  )}
                 </div>
               </div>
 
               {/* Asset picker */}
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Seleccionar Equipo(s) a Enviar:
-                </label>
-                <div className="max-h-36 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1 bg-slate-50">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-semibold text-slate-800 block text-xs">
+                    Seleccionar Equipo(s) a Enviar desde {sourceBranch ? `"${sourceBranch.name}"` : 'Origen'}:
+                  </label>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    {selectedAssetIds.length} seleccionado(s) de {availableSourceAssets.length} disponibles
+                  </span>
+                </div>
+
+                <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1 bg-slate-50">
                   {availableSourceAssets.length === 0 ? (
-                    <p className="text-slate-400 text-[11px] p-2">No hay equipos en la sucursal de origen.</p>
+                    <p className="text-slate-500 text-[11px] p-2 text-center">
+                      No hay equipos registrados en el inventario de la sucursal de origen seleccionada.
+                    </p>
                   ) : (
                     availableSourceAssets.map(a => (
-                      <label key={a.id} className="flex items-center gap-2 text-slate-700 p-1.5 hover:bg-white rounded cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedAssetIds.includes(a.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedAssetIds([...selectedAssetIds, a.id]);
-                            } else {
-                              setSelectedAssetIds(selectedAssetIds.filter(id => id !== a.id));
-                            }
-                          }}
-                          className="rounded text-indigo-600"
-                        />
-                        <span className="font-mono font-bold text-indigo-700">[{a.assetTag}]</span>
-                        <span>{a.brand} {a.model} - S/N: {a.serialNumber}</span>
+                      <label 
+                        key={a.id} 
+                        className={`flex items-center justify-between text-slate-800 p-2 rounded-lg cursor-pointer transition-colors border ${
+                          selectedAssetIds.includes(a.id) ? 'bg-blue-50 border-blue-200 text-blue-900 font-medium' : 'hover:bg-white border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={selectedAssetIds.includes(a.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedAssetIds([...selectedAssetIds, a.id]);
+                              } else {
+                                setSelectedAssetIds(selectedAssetIds.filter(id => id !== a.id));
+                              }
+                            }}
+                            className="rounded text-[#004a99] focus:ring-[#004a99] w-4 h-4 cursor-pointer"
+                          />
+                          <span className="font-mono font-bold text-xs text-[#004a99]">[{a.assetTag}]</span>
+                          <span className="truncate">{a.brand} {a.model}</span>
+                        </div>
+                        <span className="font-mono text-[11px] text-slate-500 shrink-0 ml-2">S/N: {a.serialNumber}</span>
                       </label>
                     ))
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Carrier & Tracking */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-semibold text-slate-700 block mb-1">Empresa de Transporte / Paquetería</label>
                   <input
                     type="text"
                     value={carrier}
                     onChange={(e) => setCarrier(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                    placeholder="Ej. Estafeta, DHL, Transporte Interno Petroil..."
+                    className="w-full p-2.5 border border-slate-300 rounded-xl outline-hidden focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200]"
                   />
                 </div>
                 <div>
@@ -540,32 +713,44 @@ export const BranchesAndTransfers: React.FC<BranchesAndTransfersProps> = ({
                     type="text"
                     value={trackingNumber}
                     onChange={(e) => setTrackingNumber(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-mono outline-hidden"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl font-mono outline-hidden focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200]"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Fecha Estimada de Llegada</label>
-                <input
-                  type="date"
-                  value={estimatedArrival}
-                  onChange={(e) => setEstimatedArrival(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Fecha Estimada de Llegada</label>
+                  <input
+                    type="date"
+                    value={estimatedArrival}
+                    onChange={(e) => setEstimatedArrival(e.target.value)}
+                    className="w-full p-2.5 border border-slate-300 rounded-xl outline-hidden focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200]"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Notas / Motivo del Traslado</label>
+                  <input
+                    type="text"
+                    value={transferNotes}
+                    onChange={(e) => setTransferNotes(e.target.value)}
+                    placeholder="Ej. Reubicación de personal, reposición de hardware..."
+                    className="w-full p-2.5 border border-slate-300 rounded-xl outline-hidden focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200]"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setShowNewTransferModal(false)}
-                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium"
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold cursor-pointer shadow-sm transition-colors"
                 >
                   Confirmar y Generar Folio
                 </button>
@@ -574,6 +759,182 @@ export const BranchesAndTransfers: React.FC<BranchesAndTransfersProps> = ({
           </div>
         </div>
       )}
+
+      {/* Printable / Viewable Ficha de Traslado Modal */}
+      {selectedTransferForView && (() => {
+        const trf = selectedTransferForView;
+        const src = branches.find(b => b.id === trf.sourceBranchId);
+        const dst = branches.find(b => b.id === trf.targetBranchId);
+        const transferAssets = assets.filter(a => trf.assetIds.includes(a.id));
+        const compSrc = companies?.find(c => c.id === src?.companyId);
+        const compDst = companies?.find(c => c.id === dst?.companyId);
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95">
+              <div className="p-4 bg-slate-900 text-white flex items-center justify-between no-print">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-indigo-400" />
+                  <h3 className="font-bold text-sm">Ficha Técnica Oficial de Traslado - {trf.folio}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Imprimir Ficha
+                  </button>
+                  <button onClick={() => setSelectedTransferForView(null)} className="text-slate-400 hover:text-white cursor-pointer">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-5 text-xs text-slate-800">
+                {/* Header institutional */}
+                <div className="flex items-center justify-between border-b pb-4 border-slate-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#004a99] text-white flex items-center justify-center font-bold text-lg">
+                      P
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-base text-slate-900">GRUPO PETROIL • TECNOLOGÍAS DE INFORMACIÓN</h4>
+                      <p className="text-xs text-slate-500">Comprobante y Hoja de Despacho de Traslado de Activos</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-mono font-bold text-base text-[#004a99] block">{trf.folio}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      trf.status === 'en_transito' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    }`}>
+                      {trf.status === 'en_transito' ? 'En Tránsito' : 'Recibido en Destino'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Branches Origin and Destination */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#004a99] block">
+                      📍 Sucursal de Origen (Despacho)
+                    </span>
+                    <p className="font-bold text-slate-900 text-sm">{src?.name || 'Sede Origen'}</p>
+                    {src?.code && <p className="font-mono text-[11px] text-slate-500">Código: {src.code}</p>}
+                    {compSrc && <p className="text-[11px] text-slate-600">Empresa: {compSrc.name}</p>}
+                    <p className="text-[11px] text-slate-600">{src?.address || `${src?.city}, ${src?.state}`}</p>
+                    <p className="text-[11px] text-slate-700 pt-1 border-t border-slate-200">
+                      Encargado: <strong>{src?.managerName || 'No especificado'}</strong> {src?.phone ? `• Tel: ${src.phone}` : ''}
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
+                      🚚 Sucursal de Destino (Recepción)
+                    </span>
+                    <p className="font-bold text-emerald-950 text-sm">{dst?.name || 'Sede Destino'}</p>
+                    {dst?.code && <p className="font-mono text-[11px] text-emerald-800">Código: {dst.code}</p>}
+                    {compDst && <p className="text-[11px] text-emerald-800">Empresa: {compDst.name}</p>}
+                    <p className="text-[11px] text-emerald-800">{dst?.address || `${dst?.city}, ${dst?.state}`}</p>
+                    <p className="text-[11px] text-emerald-900 pt-1 border-t border-emerald-200">
+                      Receptor: <strong>{dst?.managerName || 'Encargado Sede'}</strong> {dst?.phone ? `• Tel: ${dst.phone}` : ''}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Logistics */}
+                <div className="p-3.5 rounded-xl border border-slate-200 space-y-2 bg-white">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <span className="text-slate-500 block text-[11px]">Paquetería:</span>
+                      <strong className="text-slate-900">{trf.carrier}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[11px]">Número de Guía:</span>
+                      <strong className="font-mono text-[#004a99]">{trf.trackingNumber}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[11px]">Fecha de Envío:</span>
+                      <strong className="text-slate-900">{formatDate(trf.shipmentDate)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[11px]">Estimado Llegada:</span>
+                      <strong className="text-slate-900">{formatDate(trf.estimatedArrival)}</strong>
+                    </div>
+                  </div>
+                  {trf.actualArrival && (
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-emerald-800 font-semibold">
+                      <span>✓ Recibido el: {formatDate(trf.actualArrival)}</span>
+                      <span>Receptor autorizado: {trf.receivedBy}</span>
+                    </div>
+                  )}
+                  {trf.notes && (
+                    <p className="text-[11px] text-slate-600 pt-1 italic">
+                      Observaciones: {trf.notes}
+                    </p>
+                  )}
+                </div>
+
+                {/* Assets Table */}
+                <div>
+                  <span className="font-bold text-xs text-slate-900 block mb-2">
+                    Equipos Amparados por este Traslado ({transferAssets.length}):
+                  </span>
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px]">
+                        <tr>
+                          <th className="py-2 px-3">Placa / Tag</th>
+                          <th className="py-2 px-3">Equipo</th>
+                          <th className="py-2 px-3">Serie (S/N)</th>
+                          <th className="py-2 px-3">Especificaciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                        {transferAssets.map(a => (
+                          <tr key={a.id} className="hover:bg-slate-50">
+                            <td className="py-2 px-3 font-mono font-bold text-[#004a99]">[{a.assetTag}]</td>
+                            <td className="py-2 px-3 text-slate-900">{a.brand} {a.model}</td>
+                            <td className="py-2 px-3 font-mono text-slate-600">{a.serialNumber}</td>
+                            <td className="py-2 px-3 text-slate-500">{a.specs.ram}, {a.specs.storage}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Signatures */}
+                <div className="grid grid-cols-2 gap-6 pt-6 border-t border-slate-200">
+                  <div className="text-center space-y-1">
+                    <div className="h-14 border-b border-dashed border-slate-300 flex items-end justify-center pb-1 text-slate-400 text-[10px]">
+                      {trf.requestedBy || 'Despachado por TI'}
+                    </div>
+                    <p className="font-bold text-slate-800 text-xs">Firma de Entrega / Despacho</p>
+                    <p className="text-[10px] text-slate-500">Sucursal Origen ({src?.name || 'Origen'})</p>
+                  </div>
+                  <div className="text-center space-y-1">
+                    <div className="h-14 border-b border-dashed border-slate-300 flex items-end justify-center pb-1 text-slate-400 text-[10px]">
+                      {trf.receivedBy || 'Pendiente de Recepción'}
+                    </div>
+                    <p className="font-bold text-slate-800 text-xs">Firma de Conformidad / Recepción</p>
+                    <p className="text-[10px] text-slate-500">Sucursal Destino ({dst?.name || 'Destino'})</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end no-print">
+                <button
+                  onClick={() => setSelectedTransferForView(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold cursor-pointer"
+                >
+                  Cerrar Ficha
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Confirm Arrival Modal */}
       {receivingTransfer && (
