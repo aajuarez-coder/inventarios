@@ -32,6 +32,7 @@ import { formatCurrency, formatDate, formatDateTime, getWarrantyStatus, getMaint
 import { AssetBarcode } from './AssetBarcode';
 import { AssetTraceability } from './AssetTraceability';
 import { RemoteSecurityModal } from './RemoteSecurityModal';
+import { EditAssetSpecsModal } from './EditAssetSpecsModal';
 
 interface AssetDetailModalProps {
   asset: HardwareAsset;
@@ -49,25 +50,27 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
   onOpenMap
 }) => {
   const { employees, branches, timeline, assignments, currentUser, retireAsset, returnAsset, deleteAsset, canEdit } = useInventory();
+  const [currentAsset, setCurrentAsset] = useState<HardwareAsset>(asset);
+  const [showEditSpecs, setShowEditSpecs] = useState(false);
   const [activeTab, setActiveTab] = useState<'specs' | 'timeline' | 'tag'>('specs');
   const [retireReason, setRetireReason] = useState('');
   const [showRetireConfirm, setShowRetireConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
-  const [returnBranchId, setReturnBranchId] = useState(asset.branchId || branches[0]?.id || '');
-  const [returnCondition, setReturnCondition] = useState<PhysicalCondition>(asset.physicalCondition || 'bueno');
+  const [returnBranchId, setReturnBranchId] = useState(currentAsset.branchId || branches[0]?.id || '');
+  const [returnCondition, setReturnCondition] = useState<PhysicalCondition>(currentAsset.physicalCondition || 'bueno');
   const [returnNotes, setReturnNotes] = useState('');
 
-  const employee = employees.find(e => e.id === asset.assignedToEmployeeId);
-  const branch = branches.find(b => b.id === asset.branchId);
-  const assetTimeline = timeline.filter(t => t.assetId === asset.id);
-  const currentAssignment = assignments.find(a => a.assetId === asset.id && a.status === 'activa');
+  const employee = employees.find(e => e.id === currentAsset.assignedToEmployeeId);
+  const branch = branches.find(b => b.id === currentAsset.branchId);
+  const assetTimeline = timeline.filter(t => t.assetId === currentAsset.id);
+  const currentAssignment = assignments.find(a => a.assetId === currentAsset.id && a.status === 'activa');
 
-  const warranty = getWarrantyStatus(asset.warrantyEndDate);
-  const maintenance = getMaintenanceStatus(asset.nextMaintenanceDate);
-  const statusBadge = getStatusBadge(asset.status);
-  const condition = getConditionLabel(asset.physicalCondition);
+  const warranty = getWarrantyStatus(currentAsset.warrantyEndDate);
+  const maintenance = getMaintenanceStatus(currentAsset.nextMaintenanceDate);
+  const statusBadge = getStatusBadge(currentAsset.status);
+  const condition = getConditionLabel(currentAsset.physicalCondition);
 
   const handleRetire = () => {
     if (!retireReason.trim()) {
@@ -230,42 +233,56 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
 
               {/* Hardware specifications grid */}
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-                  <Cpu className="w-3.5 h-3.5 text-indigo-600" />
-                  Ficha Técnica de Hardware
-                </h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 font-mono">
+                    <Cpu className="w-4 h-4 text-[#004a99]" />
+                    Ficha Técnica de Hardware
+                  </h3>
+
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setShowEditSpecs(true)}
+                      className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                      title="Editar especificaciones técnicas del equipo"
+                    >
+                      <Cpu className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Editar Especificaciones Técnicas</span>
+                    </button>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <div className="p-3 rounded-lg border border-slate-200 bg-white">
                     <span className="text-[10px] text-slate-400 uppercase font-semibold">Procesador (CPU)</span>
-                    <p className="text-xs font-medium text-slate-800 mt-0.5">{asset.specs.cpu || 'No especificado'}</p>
+                    <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.cpu || 'No especificado'}</p>
                   </div>
 
                   <div className="p-3 rounded-lg border border-slate-200 bg-white">
                     <span className="text-[10px] text-slate-400 uppercase font-semibold">Memoria RAM</span>
-                    <p className="text-xs font-medium text-slate-800 mt-0.5">{asset.specs.ram || 'No especificado'}</p>
+                    <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.ram || 'No especificado'}</p>
                   </div>
 
                   <div className="p-3 rounded-lg border border-slate-200 bg-white">
                     <span className="text-[10px] text-slate-400 uppercase font-semibold">Almacenamiento (Disco)</span>
-                    <p className="text-xs font-medium text-slate-800 mt-0.5">{asset.specs.storage || 'No especificado'}</p>
+                    <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.storage || 'No especificado'}</p>
                   </div>
 
                   <div className="p-3 rounded-lg border border-slate-200 bg-white">
                     <span className="text-[10px] text-slate-400 uppercase font-semibold">Sistema Operativo</span>
-                    <p className="text-xs font-medium text-slate-800 mt-0.5">{asset.specs.os || 'No especificado'}</p>
+                    <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.os || 'No especificado'}</p>
                   </div>
 
                   <div className="p-3 rounded-lg border border-slate-200 bg-white">
                     <span className="text-[10px] text-slate-400 uppercase font-semibold">Pantalla / Gráficos</span>
                     <p className="text-xs font-medium text-slate-800 mt-0.5">
-                      {asset.specs.screenSize ? `${asset.specs.screenSize}` : (asset.specs.gpu || 'Integrado')}
+                      {currentAsset.specs.screenSize ? `${currentAsset.specs.screenSize}` : (currentAsset.specs.gpu || 'Integrado')}
                     </p>
                   </div>
 
                   <div className="p-3 rounded-lg border border-slate-200 bg-white">
                     <span className="text-[10px] text-slate-400 uppercase font-semibold">Dirección MAC / Red</span>
-                    <p className="text-xs font-mono font-medium text-slate-800 mt-0.5">{asset.specs.macAddress || 'N/A'}</p>
+                    <p className="text-xs font-mono font-medium text-slate-800 mt-0.5">{currentAsset.specs.macAddress || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -651,6 +668,17 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Hardware Specs Modal */}
+      {showEditSpecs && (
+        <EditAssetSpecsModal
+          asset={currentAsset}
+          onClose={() => setShowEditSpecs(false)}
+          onSuccess={(updated) => {
+            setCurrentAsset(updated);
+          }}
+        />
       )}
     </div>
   );

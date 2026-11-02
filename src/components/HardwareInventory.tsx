@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useInventory } from '../context/InventoryContext';
 import { HardwareAsset, AssetCategory, AssetStatus, PhysicalCondition } from '../types/inventory';
 import { 
@@ -47,6 +47,7 @@ import { AssetBarcode } from './AssetBarcode';
 import { HardwareExtractionModal } from './HardwareExtractionModal';
 import { RemoteSecurityModal } from './RemoteSecurityModal';
 import { ImportHardwareModal } from './ImportHardwareModal';
+import { EditAssetSpecsModal } from './EditAssetSpecsModal';
 import { generateInstitutionalInventoryPdf } from '../utils/generateInstitutionalPdf';
 import { exportHardwareInventoryCsv } from '../utils/exportCsv';
 import confetti from 'canvas-confetti';
@@ -88,6 +89,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
   const [filterObsoleteOnly, setFilterObsoleteOnly] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [detailAsset, setDetailAsset] = useState<HardwareAsset | null>(null);
+  const [editingSpecsAsset, setEditingSpecsAsset] = useState<HardwareAsset | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [showExtractionModal, setShowExtractionModal] = useState(false);
   const [securityModalAsset, setSecurityModalAsset] = useState<HardwareAsset | null>(null);
@@ -191,6 +193,35 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
   });
 
   const obsoleteOrBajaAssets = assets.filter(a => a.status === 'baja' || a.physicalCondition === 'obsoleto');
+
+  const categoryLabels: Record<string, string> = {
+    laptop: 'Laptops / Portátiles',
+    desktop: 'Computadoras de Escritorio',
+    servidor: 'Servidores',
+    monitor: 'Monitores',
+    impresora: 'Impresoras',
+    redes: 'Redes & Switches'
+  };
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: assets.length,
+      laptop: 0,
+      desktop: 0,
+      servidor: 0,
+      monitor: 0,
+      impresora: 0,
+      redes: 0
+    };
+    assets.forEach(a => {
+      if (counts[a.category] !== undefined) {
+        counts[a.category]++;
+      } else {
+        counts[a.category] = 1;
+      }
+    });
+    return counts;
+  }, [assets]);
 
   const query = (externalSearch || search).toLowerCase();
 
@@ -716,20 +747,31 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
             <span>Filtros:</span>
           </div>
 
-          {/* Category filter */}
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium shadow-xs focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
-          >
-            <option value="all">Todas las Categorías</option>
-            <option value="laptop">Laptops / Portátiles</option>
-            <option value="desktop">Computadoras de Escritorio</option>
-            <option value="servidor">Servidores</option>
-            <option value="monitor">Monitores</option>
-            <option value="impresora">Impresoras</option>
-            <option value="redes">Redes & Switches</option>
-          </select>
+          {/* Category filter with counter */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium shadow-xs focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
+            >
+              <option value="all">Todas las Categorías ({categoryCounts.all || 0})</option>
+              <option value="laptop">Laptops / Portátiles ({categoryCounts.laptop || 0})</option>
+              <option value="desktop">Computadoras de Escritorio ({categoryCounts.desktop || 0})</option>
+              <option value="servidor">Servidores ({categoryCounts.servidor || 0})</option>
+              <option value="monitor">Monitores ({categoryCounts.monitor || 0})</option>
+              <option value="impresora">Impresoras ({categoryCounts.impresora || 0})</option>
+              <option value="redes">Redes & Switches ({categoryCounts.redes || 0})</option>
+            </select>
+
+            {selectedCategory !== 'all' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-[#004a99] font-bold text-xs shadow-xs animate-in fade-in">
+                <span className="w-2 h-2 rounded-full bg-[#004a99]" />
+                <span>
+                  Total {categoryLabels[selectedCategory] || selectedCategory}: <strong>{categoryCounts[selectedCategory] || 0}</strong> {categoryCounts[selectedCategory] === 1 ? 'equipo' : 'equipos'}
+                </span>
+              </span>
+            )}
+          </div>
 
           {/* Status filter */}
           <select
@@ -900,8 +942,18 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
       )}
 
       {/* Assets Count indicator */}
-      <div className="flex items-center justify-between text-xs text-slate-700 font-medium px-1">
-        <span>Mostrando <strong className="text-slate-900">{filteredAssets.length}</strong> de <strong className="text-slate-900">{assets.length}</strong> equipos registrados</span>
+      <div className="flex flex-wrap items-center justify-between text-xs text-slate-700 font-medium px-1 gap-2">
+        <div>
+          {selectedCategory === 'all' ? (
+            <span>
+              Mostrando <strong className="text-slate-900">{filteredAssets.length}</strong> de <strong className="text-slate-900">{assets.length}</strong> equipos registrados
+            </span>
+          ) : (
+            <span>
+              Mostrando <strong className="text-slate-900">{filteredAssets.length}</strong> de un total de <strong className="text-[#004a99] font-bold">{categoryCounts[selectedCategory] || 0}</strong> {categoryLabels[selectedCategory] || selectedCategory} <span className="text-slate-500">(Total inventario general: {assets.length})</span>
+            </span>
+          )}
+        </div>
         {selectedAssetIds.size > 0 && (
           <span className="text-[#004a99] font-bold">
             {selectedAssetIds.size} seleccionados
@@ -1029,11 +1081,22 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => setDetailAsset(asset)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
                               title="Ver ficha técnica y trazabilidad"
                             >
                               <Eye className="w-4 h-4" />
                             </button>
+
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => setEditingSpecsAsset(asset)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                title="Editar especificaciones técnicas (CPU, RAM, Disco, GPU, SO, etc.)"
+                              >
+                                <Cpu className="w-4 h-4 text-[#004a99]" />
+                              </button>
+                            )}
 
                             {asset.status === 'disponible' && (
                               <button
@@ -1226,6 +1289,16 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setEditingSpecsAsset(asset); }}
+                        className="p-1 rounded text-slate-500 hover:text-[#004a99] hover:bg-indigo-50 transition-colors cursor-pointer"
+                        title="Editar especificaciones técnicas de hardware"
+                      >
+                        <Cpu className="w-3.5 h-3.5 text-[#004a99]" />
+                      </button>
+                    )}
                     <button
                       onClick={(e) => { e.stopPropagation(); setDetailAsset(asset); }}
                       className="text-indigo-600 font-semibold hover:text-indigo-800 text-xs"
@@ -1248,6 +1321,19 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
           onOpenAssign={onOpenAssign}
           onOpenMaintenance={onOpenMaintenance}
           onOpenMap={onOpenMap}
+        />
+      )}
+
+      {/* Edit Hardware Specs Modal */}
+      {editingSpecsAsset && (
+        <EditAssetSpecsModal
+          asset={editingSpecsAsset}
+          onClose={() => setEditingSpecsAsset(null)}
+          onSuccess={(updated) => {
+            if (detailAsset?.id === updated.id) {
+              setDetailAsset(updated);
+            }
+          }}
         />
       )}
 

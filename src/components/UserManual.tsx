@@ -27,7 +27,9 @@ import {
   Lock,
   Repeat,
   Monitor,
-  Send
+  Send,
+  Building2,
+  Layers
 } from 'lucide-react';
 import { TabId } from './Sidebar';
 
@@ -204,8 +206,53 @@ export const UserManual: React.FC<UserManualProps> = ({ onNavigate }) => {
               <li>Ingrese el modelo, marca, número de serie único y sede física de radicación.</li>
               <li>Al guardar, el sistema asigna el folio patrimonial consecutivo (ej. <code>PET-LPT-001</code>).</li>
               <li>Presione el botón <strong>"Imprimir Etiqueta"</strong> para generar el formato adhesivo térmico estándar (Code128 + QR) para el chasis del equipo.</li>
+              <li>Para actualizar componentes de hardware existentes (upgrade de RAM, cambio de disco a SSD NVMe, sustitución de GPU o actualización de sistema operativo), presione el botón <strong>"Editar Especificaciones" (icono de CPU)</strong> en la tabla, tarjeta o ficha del equipo.</li>
             </ol>
           </div>
+
+          <div className="border border-indigo-200 bg-indigo-50/50 rounded-xl p-4 space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+              <Layers className="w-4 h-4 text-indigo-600" />
+              <span>Acciones Masivas en Hardware:</span>
+            </h4>
+            <p className="text-xs text-indigo-950">
+              Permite marcar múltiples equipos con casillas de selección para aplicar cambios en lote sincronizados con Firestore:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-xs text-indigo-900">
+              <li><strong>Cambiar Estado Masivo:</strong> Pasa múltiples equipos a <em>disponible</em>, <em>mantenimiento</em>, <em>traslado</em> o <em>baja</em> (desasigna resguardos automáticamente al reingresar a almacén).</li>
+              <li><strong>Reasignar Sucursal Masiva:</strong> Modifica la sede física y detalles de ubicación para todos los activos seleccionados.</li>
+              <li><strong>Mantenimiento Masivo:</strong> Programa la fecha del próximo servicio preventivo e intervalo en meses.</li>
+              <li><strong>Baja Técnica Institucional:</strong> Aplica dictamen de baja formal por obsolescencia con justificación obligatoria.</li>
+              <li><strong>Exportar CSV de Seleccionados:</strong> Genera un archivo CSV filtrado exclusivamente con los activos marcados.</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'companies',
+      title: '4.1 Empresas & Filiales Corporativas (Grupo Petroil)',
+      category: 'Módulos',
+      icon: Building2,
+      tabTarget: 'companies',
+      keywords: ['empresas', 'filiales', 'grupo petroil', 'corporativo', 'razon social', 'rfc', 'sucursales'],
+      content: (
+        <div className="space-y-4 text-sm text-slate-600">
+          <p>
+            El módulo de <strong>Empresas & Filiales</strong> permite organizar y estructurar el parque informático de Grupo Petroil separando activos y sedes por entidad legal.
+          </p>
+          <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 space-y-2">
+            <span className="font-bold block uppercase tracking-wider text-[11px] text-amber-950">
+              Requisitos de Validación Estricta:
+            </span>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong>ID de la Empresa (*):</strong> Identificador obligatorio y único (ej. <code>COMP-PETROIL-CORP</code>, <code>COMP-REDPETROIL</code>). Sirve como identificador inmutable en la base de datos Firestore.</li>
+              <li><strong>Nombre de la Empresa (*):</strong> Nombre comercial de la empresa obligatorio (ej. <em>Petroil Corporativo</em>, <em>RedPetroil Estaciones</em>).</li>
+            </ul>
+          </div>
+          <p className="text-xs text-slate-700">
+            <strong>Seguridad e Integridad:</strong> Una empresa no puede ser eliminada si tiene sucursales asignadas. Esto protege las sedes y previene inconsistencias en los registros de hardware.
+          </p>
         </div>
       )
     },

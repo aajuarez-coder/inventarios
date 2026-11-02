@@ -81,7 +81,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
   const [bulkDeptValue, setBulkDeptValue] = useState<string>('Tecnologías de Información');
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [isBulkExecuting, setIsBulkExecuting] = useState(false);
-  const [bulkBlockedList, setBulkBlockedList] = useState<Array<{ id: string; name: string; reason: string }>>([]);
+  const [bulkBlockedList, setBulkBlockedList] = useState<string[]>([]);
 
   const [editEmployeeForm, setEditEmployeeForm] = useState<Employee>({
     id: '',
@@ -251,10 +251,10 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
       if (result.blockedEmployees.length > 0) {
         setBulkBlockedList(result.blockedEmployees);
       }
-      if (result.deletedCount > 0) {
+      if (result.successCount > 0) {
         setEmployeeActionFeedback({
           type: 'success',
-          message: `Se eliminaron ${result.deletedCount} colaboradores exitosamente.` + (result.blockedEmployees.length > 0 ? ` (${result.blockedEmployees.length} colaboradores protegidos por tener equipos asignados o préstamos activos).` : '')
+          message: `Se eliminaron ${result.successCount} colaboradores exitosamente.` + (result.blockedEmployees.length > 0 ? ` (${result.blockedEmployees.length} colaboradores protegidos por tener equipos asignados o préstamos activos).` : '')
         });
       } else if (result.blockedEmployees.length > 0) {
         setEmployeeActionFeedback({
@@ -494,9 +494,9 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
             <button onClick={() => setBulkBlockedList([])} className="text-amber-700 hover:text-amber-900 font-bold cursor-pointer">✕</button>
           </div>
           <ul className="list-disc pl-5 text-amber-800 space-y-0.5">
-            {bulkBlockedList.map(b => (
-              <li key={b.id}>
-                <strong>{b.name}:</strong> {b.reason}
+            {bulkBlockedList.map((blockedItem, idx) => (
+              <li key={idx}>
+                {blockedItem}
               </li>
             ))}
           </ul>
