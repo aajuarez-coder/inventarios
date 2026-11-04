@@ -270,6 +270,28 @@ export const buildResponsivaPrintHtml = (
             <span class="field-val">${asset?.specs.storage || 'N/A'}</span>
           </div>
         </div>
+
+        ${(asset?.chargerSerial || asset?.chargerBrand || asset?.chargerModel || asset?.chargerInfo) ? `
+        <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #cbd5e1;">
+          <div style="font-size: 9px; font-weight: bold; color: #b45309; text-transform: uppercase; margin-bottom: 4px;">
+            ⚡ Datos del Cargador / Adaptador Eléctrico Asociado
+          </div>
+          <div class="grid-3">
+            <div>
+              <span class="field-label">Número de Serie Cargador (S/N):</span>
+              <span class="field-val" style="font-family: monospace; color: #1e1b4b;">${asset?.chargerSerial || asset?.chargerInfo?.serialNumber || 'N/A'}</span>
+            </div>
+            <div>
+              <span class="field-label">Marca del Cargador:</span>
+              <span class="field-val">${asset?.chargerBrand || asset?.chargerInfo?.brand || asset?.brand || 'N/A'}</span>
+            </div>
+            <div>
+              <span class="field-label">Modelo / Potencia:</span>
+              <span class="field-val">${asset?.chargerModel || asset?.chargerInfo?.model || 'Estándar Fabricante'}</span>
+            </div>
+          </div>
+        </div>
+        ` : ''}
       </div>
 
       <!-- 3. Accesorios -->
@@ -479,8 +501,14 @@ export const generateAndDownloadPdf = (
   doc.text(employee?.department || 'N/A', 155, 59);
 
   // Section 2: Hardware Box
+  const chargerSerial = asset?.chargerSerial || asset?.chargerInfo?.serialNumber;
+  const chargerBrand = asset?.chargerBrand || asset?.chargerInfo?.brand;
+  const chargerModel = asset?.chargerModel || asset?.chargerInfo?.model;
+  const hasCharger = Boolean(chargerSerial || chargerBrand || chargerModel);
+  const hardwareBoxHeight = hasCharger ? 41 : 30;
+
   doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
-  doc.roundedRect(14, 68, 184, 30, 2, 2, 'FD');
+  doc.roundedRect(14, 68, 184, hardwareBoxHeight, 2, 2, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
@@ -527,27 +555,56 @@ export const generateAndDownloadPdf = (
   doc.setTextColor(darkSlate[0], darkSlate[1], darkSlate[2]);
   doc.text(asset?.specs.storage || 'N/A', 135, 94);
 
+  if (hasCharger) {
+    doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
+    doc.setLineWidth(0.2);
+    doc.line(18, 97, 194, 97);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(180, 83, 9);
+    doc.text('CARGADOR S/N:', 18, 101);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkSlate[0], darkSlate[1], darkSlate[2]);
+    doc.text(chargerSerial || 'Sin serie registrada', 18, 105);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(grayText[0], grayText[1], grayText[2]);
+    doc.text('MARCA CARGADOR:', 80, 101);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkSlate[0], darkSlate[1], darkSlate[2]);
+    doc.text(chargerBrand || asset?.brand || 'N/A', 80, 105);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(grayText[0], grayText[1], grayText[2]);
+    doc.text('MODELO / POTENCIA:', 135, 101);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(darkSlate[0], darkSlate[1], darkSlate[2]);
+    doc.text(chargerModel || 'Estándar Fabricante', 135, 105);
+  }
+
   // Section 3: Accessories Box
-  const accHeight = Math.max(22, 14 + (assignment.accessoriesDelivered?.length || 1) * 4.5);
+  const accY = 68 + hardwareBoxHeight + 3;
+  const accHeight = Math.max(20, 12 + (assignment.accessoriesDelivered?.length || 1) * 4);
   doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
-  doc.roundedRect(14, 101, 184, accHeight, 2, 2, 'FD');
+  doc.roundedRect(14, accY, 184, accHeight, 2, 2, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(grayText[0], grayText[1], grayText[2]);
-  doc.text('3. ACCESORIOS Y PERIFÉRICOS ENTREGADOS', 18, 106);
+  doc.text('3. ACCESORIOS Y PERIFÉRICOS ENTREGADOS', 18, accY + 5);
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(darkSlate[0], darkSlate[1], darkSlate[2]);
-  let currentY = 111;
+  let currentY = accY + 10;
   if (assignment.accessoriesDelivered && assignment.accessoriesDelivered.length > 0) {
     assignment.accessoriesDelivered.forEach(acc => {
       doc.text(`• ${acc}`, 22, currentY);
-      currentY += 4.5;
+      currentY += 4;
     });
   } else {
     doc.text('• Sin accesorios adicionales', 22, currentY);
-    currentY += 4.5;
+    currentY += 4;
   }
 
   if (assignment.conditionNotes) {
@@ -555,11 +612,11 @@ export const generateAndDownloadPdf = (
     doc.setFontSize(7.5);
     doc.setTextColor(grayText[0], grayText[1], grayText[2]);
     doc.text(`Condiciones de entrega: ${assignment.conditionNotes}`, 18, currentY + 1);
-    currentY += 5;
+    currentY += 4.5;
   }
 
   // Section 4: Legal Clauses
-  const clauseY = 101 + accHeight + 4;
+  const clauseY = accY + accHeight + 3;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(grayText[0], grayText[1], grayText[2]);

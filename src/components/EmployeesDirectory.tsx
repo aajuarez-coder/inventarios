@@ -44,6 +44,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
     employees, 
     assets, 
     branches, 
+    companies,
     loans, 
     addEmployee, 
     updateEmployee, 
@@ -55,6 +56,8 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
   } = useInventory();
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('all');
+  const [selectedCompany, setSelectedCompany] = useState('all');
+  const [selectedBranch, setSelectedBranch] = useState('all');
   const [selectedEmployeeForCustody, setSelectedEmployeeForCustody] = useState<Employee | null>(null);
   const [showNewEmployeeModal, setShowNewEmployeeModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -75,6 +78,8 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
   const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
   const [bulkStatusValue, setBulkStatusValue] = useState<'activo' | 'licencia' | 'baja'>('activo');
+  const [showBulkCompanyModal, setShowBulkCompanyModal] = useState(false);
+  const [bulkCompanyValue, setBulkCompanyValue] = useState<string>(companies[0]?.id || '');
   const [showBulkBranchModal, setShowBulkBranchModal] = useState(false);
   const [bulkBranchValue, setBulkBranchValue] = useState<string>(branches[0]?.id || '');
   const [showBulkDeptModal, setShowBulkDeptModal] = useState(false);
@@ -91,6 +96,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
     phone: '',
     department: '',
     position: '',
+    companyId: companies[0]?.id || '',
     branchId: '',
     status: 'activo',
     hireDate: '2026-01-15',
@@ -103,6 +109,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
     fullName: '',
     email: '',
     phone: '',
+    companyId: companies[0]?.id || 'COMP-PETROIL-CORP',
     department: 'Tecnologías de Información',
     position: '',
     branchId: branches[0]?.id || 'branch-1',
@@ -120,7 +127,9 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
       emp.position.toLowerCase().includes(search.toLowerCase());
 
     const matchesDept = selectedDept === 'all' || emp.department === selectedDept;
-    return matchesSearch && matchesDept;
+    const matchesCompany = selectedCompany === 'all' || emp.companyId === selectedCompany;
+    const matchesBranch = selectedBranch === 'all' || emp.branchId === selectedBranch;
+    return matchesSearch && matchesDept && matchesCompany && matchesBranch;
   });
 
   const handleToggleSelectEmployee = (id: string, e?: React.MouseEvent) => {
@@ -160,12 +169,36 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
   const handleExportSelectedCsv = () => {
     const selectedList = employees.filter(e => selectedEmployeeIds.has(e.id));
     if (selectedList.length === 0) return;
-    const result = exportEmployeesCsv(selectedList, assets, branches);
+    const result = exportEmployeesCsv(selectedList, assets, branches, companies);
     setEmployeeActionFeedback({
       type: 'success',
       message: `Se exportaron ${result.count} colaboradores seleccionados a CSV exitosamente.`
     });
     setTimeout(() => setEmployeeActionFeedback(null), 4500);
+  };
+
+  const handleExecuteBulkCompany = async () => {
+    const ids = Array.from(selectedEmployeeIds);
+    if (ids.length === 0) return;
+    setIsBulkExecuting(true);
+    try {
+      const targetCompany = companies.find(c => c.id === bulkCompanyValue);
+      const count = await bulkUpdateEmployees(ids, { companyId: bulkCompanyValue });
+      setEmployeeActionFeedback({
+        type: 'success',
+        message: `Se reasignaron ${count} colaboradores a la empresa "${targetCompany?.name || bulkCompanyValue}".`
+      });
+      setShowBulkCompanyModal(false);
+      handleDeselectAll();
+    } catch (err: any) {
+      setEmployeeActionFeedback({
+        type: 'error',
+        message: `Error al reasignar empresa masivamente: ${err.message || 'Error desconocido'}`
+      });
+    } finally {
+      setIsBulkExecuting(false);
+      setTimeout(() => setEmployeeActionFeedback(null), 5000);
+    }
   };
 
   const handleExecuteBulkStatus = async () => {
@@ -296,7 +329,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
   };
 
   const handleExportCsv = () => {
-    const result = exportEmployeesCsv(filteredEmployees, assets, branches);
+    const result = exportEmployeesCsv(filteredEmployees, assets, branches, companies);
     setEmployeeActionFeedback({
       type: 'success',
       message: `Directorio de colaboradores exportado exitosamente en formato CSV (${result.count} registros).`
@@ -316,6 +349,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
       fullName: form.fullName,
       email: form.email,
       phone: form.phone || '+52 (55) 0000-0000',
+      companyId: form.companyId || companies[0]?.id || 'COMP-PETROIL-CORP',
       department: form.department,
       position: form.position || 'Especialista',
       branchId: form.branchId,
@@ -339,6 +373,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
       phone: emp.phone,
       department: emp.department,
       position: emp.position,
+      companyId: emp.companyId || companies[0]?.id || '',
       branchId: emp.branchId,
       status: emp.status,
       hireDate: emp.hireDate,
@@ -361,6 +396,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
       fullName: editEmployeeForm.fullName.trim(),
       email: editEmployeeForm.email.trim().toLowerCase(),
       phone: editEmployeeForm.phone.trim(),
+      companyId: editEmployeeForm.companyId || undefined,
       department: editEmployeeForm.department.trim(),
       position: editEmployeeForm.position.trim(),
       branchId: editEmployeeForm.branchId,
@@ -455,31 +491,64 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
         </div>
       </div>
 
-      {/* Search & Dept filters */}
-      <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-        <div className="relative w-full sm:max-w-md">
+      {/* Search & Empresa / Sucursal / Dept filters */}
+      <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 text-xs">
+        <div className="relative w-full lg:max-w-xs">
           <Search className="w-4 h-4 text-slate-600 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Buscar por nombre, correo, número de empleado, puesto..."
+            placeholder="Buscar por nombre, correo, número..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-500 focus:border-[#ff8200] focus:ring-2 focus:ring-[#ff8200]/20 outline-hidden caret-[#ff8200]"
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-slate-800 font-bold text-xs sm:text-sm shrink-0">Departamento:</span>
-          <select
-            value={selectedDept}
-            onChange={(e) => setSelectedDept(e.target.value)}
-            className="px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm font-bold focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer w-full sm:w-auto"
-          >
-            <option value="all">Todos los Departamentos</option>
-            {departments.map(d => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto">
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-700 font-bold text-xs shrink-0 hidden sm:inline">Empresa:</span>
+            <select
+              value={selectedCompany}
+              onChange={(e) => setSelectedCompany(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs sm:text-sm font-bold focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer w-full"
+              title="Filtrar colaboradores por empresa del grupo"
+            >
+              <option value="all">Todas las Empresas ({companies.length})</option>
+              {companies.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-700 font-bold text-xs shrink-0 hidden sm:inline">Sucursal:</span>
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs sm:text-sm font-bold focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer w-full"
+              title="Filtrar colaboradores por sucursal sede"
+            >
+              <option value="all">Todas las Sucursales ({branches.length})</option>
+              {branches.map(b => (
+                <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-700 font-bold text-xs shrink-0 hidden sm:inline">Depto:</span>
+            <select
+              value={selectedDept}
+              onChange={(e) => setSelectedDept(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs sm:text-sm font-bold focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer w-full"
+              title="Filtrar colaboradores por departamento"
+            >
+              <option value="all">Todos los Deptos</option>
+              {departments.map(d => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -524,12 +593,12 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowBulkStatusModal(true)}
+              onClick={() => setShowBulkCompanyModal(true)}
               className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="Modificar estatus de los colaboradores seleccionados"
+              title="Reasignar empresa del grupo"
             >
-              <Tag className="w-3.5 h-3.5 text-amber-400" />
-              <span>Cambiar Estatus</span>
+              <Briefcase className="w-3.5 h-3.5 text-blue-400" />
+              <span>Asignar Empresa</span>
             </button>
 
             <button
@@ -540,6 +609,16 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
             >
               <Building2 className="w-3.5 h-3.5 text-indigo-400" />
               <span>Reasignar Sucursal</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowBulkStatusModal(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Modificar estatus de los colaboradores seleccionados"
+            >
+              <Tag className="w-3.5 h-3.5 text-amber-400" />
+              <span>Cambiar Estatus</span>
             </button>
 
             <button
@@ -609,6 +688,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredEmployees.map(emp => {
           const branch = branches.find(b => b.id === emp.branchId);
+          const company = companies.find(c => c.id === emp.companyId);
           const assignedAssets = assets.filter(a => a.assignedToEmployeeId === emp.id && a.status === 'asignado');
           const isSelected = selectedEmployeeIds.has(emp.id);
 
@@ -669,8 +749,16 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
                     </button>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Building2 className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                    <span className="truncate font-semibold text-slate-800">{branch?.name || 'Oficina'}</span>
+                    <Briefcase className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span className="truncate font-semibold text-slate-800" title={company?.name}>
+                      {company?.name || 'Empresa no asignada'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                    <span className="truncate font-semibold text-slate-800" title={branch?.name}>
+                      {branch?.name || 'Sucursal no asignada'}
+                    </span>
                   </div>
                 </div>
 
@@ -754,21 +842,35 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
       </div>
 
       {/* Custody Drawer / Modal */}
-      {selectedEmployeeForCustody && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-              <div>
-                <p className="text-xs text-indigo-300 font-mono">Custodia de Activos Fijos</p>
-                <h3 className="font-bold text-base text-white">{selectedEmployeeForCustody.fullName}</h3>
+      {selectedEmployeeForCustody && (() => {
+        const custodyCompany = companies.find(c => c.id === selectedEmployeeForCustody.companyId);
+        const custodyBranch = branches.find(b => b.id === selectedEmployeeForCustody.branchId);
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+              <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-indigo-300 font-mono">Custodia de Activos Fijos</p>
+                  <h3 className="font-bold text-base text-white">{selectedEmployeeForCustody.fullName}</h3>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300 mt-1">
+                    <span className="flex items-center gap-1">
+                      <Briefcase className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{custodyCompany?.name || 'Empresa no asignada'}</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>{custodyBranch?.name || 'Sucursal no asignada'}</span>
+                    </span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedEmployeeForCustody(null)}
+                  className="p-1 rounded text-slate-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button 
-                onClick={() => setSelectedEmployeeForCustody(null)}
-                className="p-1 rounded text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
             <div className="p-5 max-h-[60vh] overflow-y-auto space-y-3">
               {assets.filter(a => a.assignedToEmployeeId === selectedEmployeeForCustody.id && a.status === 'asignado').length === 0 ? (
@@ -833,7 +935,8 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
             </div>
           </div>
         </div>
-      )}
+      );
+    })()}
 
       {/* New Employee Modal */}
       {showNewEmployeeModal && (
@@ -923,17 +1026,32 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Sucursal de Adscripción *</label>
-                <select
-                  value={form.branchId}
-                  onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
-                >
-                  {branches.map(b => (
-                    <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Empresa del Grupo *</label>
+                  <select
+                    value={form.companyId}
+                    onChange={(e) => setForm({ ...form, companyId: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
+                  >
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Sucursal de Adscripción *</label>
+                  <select
+                    value={form.branchId}
+                    onChange={(e) => setForm({ ...form, branchId: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
+                  >
+                    {branches.map(b => (
+                      <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
@@ -1052,7 +1170,19 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Empresa del Grupo *</label>
+                  <select
+                    value={editEmployeeForm.companyId || ''}
+                    onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, companyId: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
+                  >
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Sucursal de Adscripción *</label>
                   <select
@@ -1065,6 +1195,9 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Fecha de Ingreso *</label>
                   <input
@@ -1075,17 +1208,16 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
                     className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">URL de Fotografía de Perfil (Opcional)</label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={editEmployeeForm.avatarUrl || ''}
-                  onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, avatarUrl: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl outline-hidden text-sm font-mono text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] caret-[#ff8200]"
-                />
+                <div>
+                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">URL de Fotografía de Perfil (Opcional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={editEmployeeForm.avatarUrl || ''}
+                    onChange={(e) => setEditEmployeeForm({ ...editEmployeeForm, avatarUrl: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl outline-hidden text-sm font-mono text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] caret-[#ff8200]"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
@@ -1354,6 +1486,64 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
                 >
                   <Tag className="w-4 h-4" />
                   <span>{isBulkExecuting ? 'Actualizando...' : `Aplicar a ${selectedEmployeeIds.size} Colaboradores`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Company Reassignment Modal */}
+      {showBulkCompanyModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <p className="text-xs text-blue-400 font-mono font-bold uppercase">Acción Masiva de Empresa</p>
+                <h3 className="font-bold text-base text-white">Reasignar Empresa ({selectedEmployeeIds.size} colaboradores)</h3>
+              </div>
+              <button onClick={() => setShowBulkCompanyModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs sm:text-sm">
+              <p className="text-slate-600">
+                Selecciona la empresa del grupo a la que pertenecerán los <strong>{selectedEmployeeIds.size}</strong> colaboradores seleccionados:
+              </p>
+
+              <div>
+                <label className="font-bold text-slate-800 block mb-1.5">Empresa Registrada *</label>
+                <select
+                  value={bulkCompanyValue}
+                  onChange={(e) => setBulkCompanyValue(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
+                >
+                  {companies.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.businessName ? `— ${c.businessName}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkCompanyModal(false)}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkCompany}
+                  disabled={isBulkExecuting}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Briefcase className="w-4 h-4" />
+                  <span>{isBulkExecuting ? 'Reasignando...' : `Asignar a ${selectedEmployeeIds.size} Colaboradores`}</span>
                 </button>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { HardwareAsset, Employee, Branch, AssetCategory, AssetStatus, PhysicalCondition } from '../types/inventory';
+import { HardwareAsset, Employee, Branch, Company, AssetCategory, AssetStatus, PhysicalCondition } from '../types/inventory';
 import { downloadCsv } from './exportCsv';
 
 /**
@@ -303,7 +303,8 @@ export function parseHardwareAssetsFromCsv(
 export function parseEmployeesFromCsv(
   csvText: string,
   branches: Branch[],
-  existingEmployees: Employee[]
+  existingEmployees: Employee[],
+  companies?: Company[]
 ): {
   valid: Omit<Employee, 'id'>[];
   errors: { row: number; error: string; raw: Record<string, string> }[];
@@ -336,6 +337,7 @@ export function parseEmployeesFromCsv(
   const phoneIdx = getIndex('telefono', 'phone', 'celular', 'movil', 'extension');
   const deptIdx = getIndex('departamento', 'department', 'area', 'depto');
   const posIdx = getIndex('puesto', 'position', 'cargo', 'posicion');
+  const companyIdx = getIndex('empresa', 'compania', 'company', 'razonsocial', 'negocio', 'idempresa');
   const branchIdx = getIndex('sucursal', 'sede', 'branch', 'almacen');
   const statusIdx = getIndex('estatus', 'status', 'estado', 'estatuslaboral');
   const hireDateIdx = getIndex('fechadeingreso', 'fechaingreso', 'hiredate', 'ingreso');
@@ -419,6 +421,19 @@ export function parseEmployeesFromCsv(
     batchNumbers.add(numUpper);
     batchEmails.add(emailLower);
 
+    // Company matching
+    const rawCompany = getVal(companyIdx).toLowerCase();
+    let targetCompany = companies && companies.length > 0 ? companies[0] : undefined;
+    if (rawCompany && companies && companies.length > 0) {
+      const foundCompany = companies.find(
+        (c) =>
+          c.id.toLowerCase() === rawCompany ||
+          c.name.toLowerCase().includes(rawCompany) ||
+          (c.businessName && c.businessName.toLowerCase().includes(rawCompany))
+      );
+      if (foundCompany) targetCompany = foundCompany;
+    }
+
     // Branch matching
     const rawBranch = getVal(branchIdx).toLowerCase();
     let targetBranch = branches[0];
@@ -445,6 +460,7 @@ export function parseEmployeesFromCsv(
       phone: getVal(phoneIdx, '+52 (669) 989-0000'),
       department: getVal(deptIdx, 'Operaciones'),
       position: getVal(posIdx, 'Especialista'),
+      companyId: targetCompany?.id || 'COMP-PETROIL-CORP',
       branchId: targetBranch?.id || 'branch-1',
       status,
       hireDate: getVal(hireDateIdx, '2026-01-15'),
@@ -543,6 +559,7 @@ export function downloadEmployeesCsvTemplate(): void {
     'Nombre Completo',
     'Correo Institucional',
     'Telefono',
+    'Empresa',
     'Departamento',
     'Puesto',
     'Sucursal / Sede',
@@ -556,6 +573,7 @@ export function downloadEmployeesCsvTemplate(): void {
       'Carlos Eduardo Morales Ríos',
       'cmorales@petroil.com.mx',
       '+52 (669) 912-3456',
+      'Petroil Corporativo',
       'Tecnologías de Información',
       'Ingeniero de Soporte TI',
       'Almacén Central Mazatlán',
@@ -567,6 +585,7 @@ export function downloadEmployeesCsvTemplate(): void {
       'Mariana Lizárraga Osuna',
       'mlizarraga@petroil.com.mx',
       '+52 (667) 745-8901',
+      'Combustibles Petroil',
       'Finanzas y Tesorería',
       'Analista Contable Senior',
       'Sucursal Culiacán',
@@ -578,6 +597,7 @@ export function downloadEmployeesCsvTemplate(): void {
       'Roberto Valdez Sánchez',
       'rvaldez@petroil.com.mx',
       '+52 (662) 234-5678',
+      'Petroil Logística Marina',
       'Operaciones y Logística',
       'Supervisor de Planta',
       'Terminal Marítima',

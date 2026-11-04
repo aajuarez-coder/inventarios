@@ -28,6 +28,8 @@ import { EquipmentLoan, LoanStatus, PhysicalCondition, HardwareAsset, Employee }
 import { formatDate, formatDateTime } from '../utils/formatters';
 import { DigitalSignaturePad } from './DigitalSignaturePad';
 import { RemoteSecurityModal } from './RemoteSecurityModal';
+import { AssetSearchSelect } from './common/AssetSearchSelect';
+import { EmployeeSearchSelect } from './common/EmployeeSearchSelect';
 
 interface EquipmentLoansManagerProps {
   onOpenAssetDetail?: (assetId: string) => void;
@@ -621,49 +623,32 @@ export const EquipmentLoansManager: React.FC<EquipmentLoansManagerProps> = ({ on
 
             {/* Modal Form */}
             <form onSubmit={handleCreateLoanSubmit} className="p-6 overflow-y-auto space-y-4 text-sm">
-              {/* Asset & Employee Pickers */}
+              {/* Asset & Employee Pickers with Real-time Auto Search */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Equipo de Almacén a Prestar *
-                  </label>
-                  <select
-                    value={selectedAssetId}
-                    onChange={(e) => setSelectedAssetId(e.target.value)}
+                  <AssetSearchSelect
+                    label="Equipo de Almacén a Prestar"
+                    sublabel={`${availableAssets.length} en almacén`}
+                    assets={assets}
+                    filterStatus={['disponible']}
+                    selectedAssetId={selectedAssetId}
+                    onSelectAsset={(id) => setSelectedAssetId(id)}
+                    placeholder="Teclee placa, marca, modelo o serie..."
                     required
-                    className="w-full px-3.5 py-2.5 text-sm font-medium border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
-                  >
-                    <option value="">-- Seleccionar Equipo Disponible --</option>
-                    {availableAssets.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.assetTag} - {a.brand} {a.model} ({a.category})
-                      </option>
-                    ))}
-                  </select>
-                  {availableAssets.length === 0 && (
-                    <span className="text-[11px] text-amber-600 mt-1 block">
-                      No hay equipos en almacén con estado disponible.
-                    </span>
-                  )}
+                    emptyNotice="No hay equipos en almacén con estado disponible."
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Colaborador Receptor (Solicitante) *
-                  </label>
-                  <select
-                    value={selectedEmployeeId}
-                    onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                  <EmployeeSearchSelect
+                    label="Colaborador Receptor (Solicitante)"
+                    sublabel={`${employees.length} registrados`}
+                    employees={employees}
+                    selectedEmployeeId={selectedEmployeeId}
+                    onSelectEmployee={(id) => setSelectedEmployeeId(id)}
+                    placeholder="Teclee nombre, # nómina o puesto..."
                     required
-                    className="w-full px-3.5 py-2.5 text-sm font-medium border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
-                  >
-                    <option value="">-- Seleccionar Colaborador --</option>
-                    {employees.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.fullName} ({emp.department} - {emp.position})
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
 

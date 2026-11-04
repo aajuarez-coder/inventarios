@@ -25,7 +25,7 @@ export const ImportEmployeesModal: React.FC<ImportEmployeesModalProps> = ({
   onClose,
   onSuccess
 }) => {
-  const { employees, branches, addMultipleEmployees } = useInventory();
+  const { employees, branches, companies, addMultipleEmployees } = useInventory();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [fileName, setFileName] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export const ImportEmployeesModal: React.FC<ImportEmployeesModalProps> = ({
     reader.onload = (e) => {
       const text = e.target?.result as string;
       if (text) {
-        const result = parseEmployeesFromCsv(text, branches, employees);
+        const result = parseEmployeesFromCsv(text, branches, employees, companies);
         setParsedData(result);
       }
     };

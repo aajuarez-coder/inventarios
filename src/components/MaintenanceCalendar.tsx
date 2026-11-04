@@ -672,6 +672,12 @@ export const MaintenanceCalendar: React.FC<MaintenanceCalendarProps> = ({
                           Cada {ev.asset.maintenanceIntervalMonths || 6} meses
                         </span>
                       </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-[rgba(248,250,252,0.4)] font-mono">Duración estimada:</span>
+                        <span className="text-amber-400 font-mono">
+                          120 a 150 min
+                        </span>
+                      </div>
                     </div>
                   </div>
 

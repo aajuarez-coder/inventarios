@@ -1,4 +1,4 @@
-import { HardwareAsset, Employee, Branch } from '../types/inventory';
+import { HardwareAsset, Employee, Branch, Company } from '../types/inventory';
 
 /**
  * Encapsulates RFC 4180 CSV generation with UTF-8 BOM (\uFEFF)
@@ -146,6 +146,7 @@ export function exportEmployeesCsv(
   employees: Employee[],
   assets: HardwareAsset[],
   branches: Branch[],
+  companies?: Company[],
   customFilename?: string
 ): { success: boolean; count: number } {
   const dateStr = new Date().toISOString().split('T')[0];
@@ -156,6 +157,8 @@ export function exportEmployeesCsv(
     'Nombre Completo',
     'Correo Institucional',
     'Teléfono / Celular',
+    'Empresa',
+    'ID Empresa',
     'Departamento',
     'Puesto / Cargo',
     'Sucursal / Sede',
@@ -171,6 +174,7 @@ export function exportEmployeesCsv(
 
   const rows = employees.map((emp) => {
     const branch = branches.find((b) => b.id === emp.branchId);
+    const company = companies?.find((c) => c.id === emp.companyId);
     const assigned = assets.filter((a) => a.assignedToEmployeeId === emp.id && a.status === 'asignado');
 
     const statusMap: Record<string, string> = {
@@ -188,6 +192,8 @@ export function exportEmployeesCsv(
       emp.fullName,
       emp.email,
       emp.phone || '',
+      company?.name || 'Petroil Corporativo',
+      emp.companyId || '',
       emp.department,
       emp.position,
       branch?.name || '',

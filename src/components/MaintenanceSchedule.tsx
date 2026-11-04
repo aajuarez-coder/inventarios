@@ -33,6 +33,8 @@ import { formatDate, getMaintenanceStatus } from '../utils/formatters';
 import { EmailSimulatorModal } from './EmailSimulatorModal';
 import { MaintenanceCalendar } from './MaintenanceCalendar';
 import { generateInstitutionalMaintenancePdf } from '../utils/generateInstitutionalPdf';
+import { AssetSearchSelect } from './common/AssetSearchSelect';
+import { EmployeeSearchSelect } from './common/EmployeeSearchSelect';
 import confetti from 'canvas-confetti';
 
 interface MaintenanceScheduleProps {
@@ -84,6 +86,7 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
       'Pruebas de estrés térmico y temperaturas operativas'
     ],
     diagnosticScore: 98,
+    durationMinutes: 120, // Extendido a 120min - 150min
     nextScheduledDate: '2027-04-16' // 6 months ahead
   });
 
@@ -214,6 +217,7 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
       description: serviceForm.description,
       tasksCompleted: serviceForm.tasks,
       diagnosticScore: serviceForm.diagnosticScore,
+      durationMinutes: Number(serviceForm.durationMinutes) || 120,
       nextScheduledDate: serviceForm.nextScheduledDate,
       status: 'completado',
       emailNotified: false
@@ -772,32 +776,43 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
             <form onSubmit={handleCreateService} className="p-6 overflow-y-auto space-y-4 text-xs font-mono">
               
               <div>
-                <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase">Equipo Atendido *</label>
-                <select
+                <AssetSearchSelect
+                  label="Equipo Atendido *"
+                  sublabel={`${assets.length} en catálogo`}
+                  assets={assets}
+                  selectedAssetId={serviceForm.assetId}
+                  onSelectAsset={(id) => setServiceForm({ ...serviceForm, assetId: id })}
+                  placeholder="Teclee placa, marca, modelo o serie del equipo..."
                   required
-                  value={serviceForm.assetId}
-                  onChange={(e) => setServiceForm({ ...serviceForm, assetId: e.target.value })}
-                  className="w-full p-2.5 border border-[rgba(248,250,252,0.15)] rounded-[6px] bg-[#0a0e14] text-[#f8fafc] outline-hidden focus:border-[#ff8200]"
-                >
-                  <option value="" className="bg-[#131a26]">-- Seleccionar Equipo --</option>
-                  {assets.map(a => (
-                    <option key={a.id} value={a.id} className="bg-[#131a26]">
-                      [{a.assetTag}] {a.brand} {a.model} - S/N: {a.serialNumber}
-                    </option>
-                  ))}
-                </select>
+                  darkTheme={true}
+                  emptyNotice="No se encontró ningún equipo en catálogo con esos criterios."
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase">Técnico Responsable *</label>
-                  <input
-                    type="text"
-                    required
-                    value={serviceForm.technicianName}
-                    onChange={(e) => setServiceForm({ ...serviceForm, technicianName: e.target.value })}
-                    className="w-full p-2 border border-[rgba(248,250,252,0.15)] rounded-[6px] bg-[#0a0e14] text-[#f8fafc] outline-hidden focus:border-[#ff8200]"
-                  />
+                  <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1.5 text-[11px] uppercase flex items-center justify-between">
+                    <span>Técnico Responsable *</span>
+                    <span className="text-[10px] text-[#ff8200] font-normal lowercase">teclee o seleccione</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Teclee nombre del técnico o personal TI..."
+                      value={serviceForm.technicianName}
+                      onChange={(e) => setServiceForm({ ...serviceForm, technicianName: e.target.value })}
+                      list="technicians-datalist"
+                      className="w-full p-2.5 border border-[rgba(248,250,252,0.15)] rounded-[6px] bg-[#0a0e14] text-[#f8fafc] text-xs outline-hidden focus:border-[#ff8200] focus:ring-1 focus:ring-[#ff8200]/30"
+                    />
+                    <datalist id="technicians-datalist">
+                      {employees.map(emp => (
+                        <option key={emp.id} value={emp.fullName}>
+                          {emp.fullName} - {emp.position} ({emp.department})
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
                 </div>
                 <div>
                   <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase">Costo Estimado Insumos (MXN)</label>
@@ -835,7 +850,7 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase">Calificación Diagnóstica (1-100):</label>
                   <input
@@ -846,6 +861,22 @@ export const MaintenanceSchedule: React.FC<MaintenanceScheduleProps> = ({ presel
                     onChange={(e) => setServiceForm({ ...serviceForm, diagnosticScore: Number(e.target.value) })}
                     className="w-full p-2 border border-[rgba(248,250,252,0.15)] rounded-[6px] bg-[#0a0e14] text-[#f8fafc] outline-hidden focus:border-[#ff8200]"
                   />
+                </div>
+                <div>
+                  <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase flex items-center justify-between">
+                    <span>Tiempo de Servicio:</span>
+                    <span className="text-[#ff8200] font-normal lowercase">120 - 150 min</span>
+                  </label>
+                  <select
+                    value={serviceForm.durationMinutes}
+                    onChange={(e) => setServiceForm({ ...serviceForm, durationMinutes: Number(e.target.value) })}
+                    className="w-full p-2 border border-[rgba(248,250,252,0.15)] rounded-[6px] bg-[#0a0e14] text-[#ff8200] font-bold outline-hidden focus:border-[#ff8200] cursor-pointer"
+                  >
+                    <option value={120}>120 min (2.0 horas - Estándar TI)</option>
+                    <option value={135}>135 min (2.25 horas)</option>
+                    <option value={150}>150 min (2.5 horas - Mantenimiento Completo)</option>
+                    <option value={180}>180 min (3.0 horas - Servicio Mayor)</option>
+                  </select>
                 </div>
                 <div>
                   <label className="font-semibold text-[rgba(248,250,252,0.8)] block mb-1 text-[11px] uppercase">Próxima Fecha de Mantenimiento:</label>

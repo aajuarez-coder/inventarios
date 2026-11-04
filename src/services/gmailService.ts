@@ -339,6 +339,7 @@ export const EmailTemplates = {
     locationRoom: string;
     backupNote: boolean;
     chargerNote: boolean;
+    estimatedDuration?: string;
     additionalInstructions?: string;
   }) => {
     return `
@@ -371,7 +372,7 @@ export const EmailTemplates = {
                   <td style="padding: 16px; font-size: 13px; color: #312e81;">
                     <p style="margin: 0 0 8px 0;">📅 <strong>Fecha programada:</strong> ${params.scheduledDate}</p>
                     <p style="margin: 0 0 8px 0;">📍 <strong>Lugar de atención:</strong> ${params.locationRoom}</p>
-                    <p style="margin: 0;">⏱️ <strong>Tiempo estimado:</strong> 45 a 60 minutos</p>
+                    <p style="margin: 0;">⏱️ <strong>Tiempo estimado:</strong> ${params.estimatedDuration || '120 a 150 minutos (2 a 2.5 horas)'}</p>
                   </td>
                 </tr>
               </table>

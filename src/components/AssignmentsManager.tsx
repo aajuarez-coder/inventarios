@@ -30,6 +30,8 @@ import { DigitalSignaturePad } from './DigitalSignaturePad';
 import { exportResponsivaToPDF, buildResponsivaPrintHtml, executePrintDialog } from '../utils/generatePdf';
 import { useGmail } from '../context/GmailContext';
 import { EmailTemplates } from '../services/gmailService';
+import { EmployeeSearchSelect } from './common/EmployeeSearchSelect';
+import { AssetSearchSelect } from './common/AssetSearchSelect';
 import confetti from 'canvas-confetti';
 
 interface AssignmentsManagerProps {
@@ -719,6 +721,23 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
                       <span className="text-slate-500 block text-[10px]">Almacenamiento:</span>
                       <span className="text-slate-800">{asset?.specs.storage}</span>
                     </div>
+
+                    {(asset?.chargerSerial || asset?.chargerBrand || asset?.chargerModel || asset?.chargerInfo) && (
+                      <div className="col-span-2 sm:col-span-3 pt-2 mt-1 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-2 bg-amber-50/60 p-2 rounded-md">
+                        <div>
+                          <span className="text-amber-800 font-semibold block text-[10px]">Cargador Serie (S/N):</span>
+                          <strong className="font-mono text-slate-900 text-xs">{asset.chargerSerial || asset.chargerInfo?.serialNumber || 'N/A'}</strong>
+                        </div>
+                        <div>
+                          <span className="text-amber-800 font-semibold block text-[10px]">Marca del Cargador:</span>
+                          <span className="text-slate-900 text-xs">{asset.chargerBrand || asset.chargerInfo?.brand || asset.brand}</span>
+                        </div>
+                        <div>
+                          <span className="text-amber-800 font-semibold block text-[10px]">Modelo / Potencia:</span>
+                          <span className="text-slate-900 text-xs">{asset.chargerModel || asset.chargerInfo?.model || 'Estándar'}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -895,242 +914,33 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
 
             <form onSubmit={handleCreateAssignment} className="p-6 overflow-y-auto space-y-4 text-sm">
               
-              {/* Asset selection */}
+              {/* Asset selection with real-time auto-search typing */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px]">
-                    1. Seleccione Equipo Disponible del Almacén *
-                  </label>
-                  <span className="text-[11px] text-slate-500 font-medium">
-                    {availableAssets.length} disponibles
-                  </span>
-                </div>
-
-                {availableAssets.length > 5 && (
-                  <div className="relative mb-2">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="Filtrar equipos por etiqueta, marca, modelo, serie o procesador..."
-                      value={assetSearchQuery}
-                      onChange={(e) => setAssetSearchQuery(e.target.value)}
-                      className="w-full pl-8.5 pr-7 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:bg-white text-slate-800 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden placeholder:text-slate-400"
-                    />
-                    {assetSearchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setAssetSearchQuery('')}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                <select
+                <AssetSearchSelect
+                  label="1. Seleccione Equipo Disponible del Almacén"
+                  sublabel={`${availableAssets.length} disponibles`}
+                  assets={assets}
+                  filterStatus={['disponible']}
+                  selectedAssetId={selectedAssetId}
+                  onSelectAsset={(id) => setSelectedAssetId(id)}
+                  placeholder="Teclee placa, marca, modelo, serie o procesador para buscar..."
                   required
-                  value={selectedAssetId}
-                  onChange={(e) => setSelectedAssetId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 text-sm font-medium focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
-                >
-                  <option value="">-- Seleccionar Equipo Disponible --</option>
-                  {filteredAvailableAssets.map(a => (
-                    <option key={a.id} value={a.id}>
-                      [{a.assetTag}] {a.brand} {a.model} - S/N: {a.serialNumber} ({a.specs.ram}, {a.specs.storage})
-                    </option>
-                  ))}
-                </select>
-                {availableAssets.length === 0 && (
-                  <p className="text-[11px] text-amber-600 mt-1">
-                    No hay equipos con estado "En Almacén / Disponible". Registre uno nuevo o retorne un equipo.
-                  </p>
-                )}
+                  emptyNotice="No hay equipos con estado 'Disponible' en el inventario. Registre uno nuevo o devuelva un equipo al almacén."
+                />
               </div>
 
-              {/* Employee selection with live auto-search */}
+              {/* Employee selection with real-time auto-search typing */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px]">
-                    2. Seleccione Colaborador Destinatario *
-                  </label>
-                  <span className="text-[11px] text-slate-500 font-medium">
-                    {employees.length} colaboradores registrados
-                  </span>
-                </div>
-
-                <div className="relative" ref={employeeDropdownRef}>
-                  <div className="relative flex items-center">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
-                    <input
-                      ref={employeeInputRef}
-                      type="text"
-                      value={employeeSearchQuery}
-                      onChange={(e) => {
-                        setEmployeeSearchQuery(e.target.value);
-                        setIsEmployeeDropdownOpen(true);
-                      }}
-                      onFocus={() => setIsEmployeeDropdownOpen(true)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          if (filteredEmployeesForAssignment.length > 0) {
-                            setSelectedEmployeeId(filteredEmployeesForAssignment[0].id);
-                            setIsEmployeeDropdownOpen(false);
-                            setEmployeeSearchQuery('');
-                          }
-                        } else if (e.key === 'Escape') {
-                          setIsEmployeeDropdownOpen(false);
-                        }
-                      }}
-                      placeholder="Teclee nombre, # nómina, puesto, departamento o correo..."
-                      className="w-full pl-10 pr-10 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 text-sm font-medium focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden placeholder:text-slate-400 shadow-2xs"
-                    />
-                    {employeeSearchQuery ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEmployeeSearchQuery('');
-                          setIsEmployeeDropdownOpen(true);
-                          employeeInputRef.current?.focus();
-                        }}
-                        className="absolute right-3 p-1 text-slate-400 hover:text-slate-600 rounded-md cursor-pointer"
-                        title="Borrar búsqueda"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setIsEmployeeDropdownOpen(prev => !prev)}
-                        className="absolute right-3 p-1 text-slate-400 hover:text-slate-600 rounded-md cursor-pointer"
-                      >
-                        <ChevronDown className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Dropdown list */}
-                  {isEmployeeDropdownOpen && (
-                    <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-300 rounded-xl shadow-2xl max-h-64 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95">
-                      <div className="p-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium sticky top-0 z-10">
-                        <span>
-                          {filteredEmployeesForAssignment.length} {filteredEmployeesForAssignment.length === 1 ? 'resultado encontrado' : 'resultados encontrados'}
-                        </span>
-                        {employeeSearchQuery ? (
-                          <span className="text-[#004a99] font-bold">
-                            Filtro: "{employeeSearchQuery}"
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">
-                            Mostrando todos (teclee para filtrar)
-                          </span>
-                        )}
-                      </div>
-
-                      {filteredEmployeesForAssignment.length === 0 ? (
-                        <div className="p-4 text-center text-xs text-slate-500 space-y-1">
-                          <p className="font-semibold text-slate-700">No se encontraron colaboradores</p>
-                          <p className="text-[11px] text-slate-400">
-                            No hay coincidencias con "{employeeSearchQuery}". Intente con otro término o número de nómina.
-                          </p>
-                        </div>
-                      ) : (
-                        filteredEmployeesForAssignment.map(emp => {
-                          const isSelected = emp.id === selectedEmployeeId;
-                          return (
-                            <button
-                              key={emp.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedEmployeeId(emp.id);
-                                setEmployeeSearchQuery('');
-                                setIsEmployeeDropdownOpen(false);
-                              }}
-                              className={`w-full p-2.5 text-left flex items-center justify-between gap-3 transition-colors cursor-pointer ${
-                                isSelected ? 'bg-blue-50/90 text-blue-900' : 'hover:bg-slate-50 text-slate-800'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                                  isSelected ? 'bg-[#004a99] text-white' : 'bg-slate-200 text-slate-700'
-                                }`}>
-                                  {emp.fullName.split(' ').map(n => n[0]).slice(0, 2).join('')}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-bold text-xs text-slate-900">{emp.fullName}</span>
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                                      Nómina #{emp.employeeNumber}
-                                    </span>
-                                  </div>
-                                  <div className="text-[11px] text-slate-500 truncate">
-                                    <span className="text-slate-700 font-medium">{emp.position}</span> • {emp.department}
-                                    {emp.email && <span className="ml-1 text-slate-400">• {emp.email}</span>}
-                                  </div>
-                                </div>
-                              </div>
-                              {isSelected ? (
-                                <Check className="w-4 h-4 text-[#004a99] shrink-0" />
-                              ) : (
-                                <span className="text-[10px] text-slate-400 hover:text-slate-600 font-medium shrink-0">
-                                  Seleccionar
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
-
-                  {/* Selected Collaborator Confirmation Card */}
-                  {selectedEmployee && (
-                    <div className="mt-2.5 p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center justify-between gap-3 animate-in fade-in">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-9 h-9 rounded-full bg-[#004a99] text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
-                          {selectedEmployee.fullName.split(' ').map(n => n[0]).slice(0, 2).join('')}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-xs text-slate-900">{selectedEmployee.fullName}</span>
-                            <span className="px-2 py-0.5 rounded-md bg-blue-100 text-[#004a99] font-mono text-[11px] font-bold">
-                              Nómina #{selectedEmployee.employeeNumber}
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-100/80 border border-emerald-300 px-1.5 py-0.5 rounded font-bold">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              Colaborador Seleccionado
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-slate-600 truncate mt-0.5">
-                            <span className="font-semibold text-slate-800">{selectedEmployee.position}</span> • {selectedEmployee.department}
-                            {selectedEmployee.email && <span className="text-slate-500"> ({selectedEmployee.email})</span>}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedEmployeeId('');
-                          setEmployeeSearchQuery('');
-                          setIsEmployeeDropdownOpen(true);
-                          setTimeout(() => employeeInputRef.current?.focus(), 50);
-                        }}
-                        className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold shrink-0 transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
-                        title="Quitar selección y buscar otro colaborador"
-                      >
-                        <RotateCcw className="w-3 h-3 text-slate-500" />
-                        Cambiar
-                      </button>
-                    </div>
-                  )}
-
-                  {!selectedEmployee && (
-                    <p className="text-[11px] text-amber-700 mt-1.5 flex items-center gap-1 font-medium">
-                      <span>* Teclee en el recuadro superior para buscar y seleccionar al colaborador</span>
-                    </p>
-                  )}
-                </div>
+                <EmployeeSearchSelect
+                  label="2. Seleccione Colaborador Destinatario"
+                  sublabel={`${employees.length} colaboradores registrados`}
+                  employees={employees}
+                  selectedEmployeeId={selectedEmployeeId}
+                  onSelectEmployee={(id) => setSelectedEmployeeId(id)}
+                  placeholder="Teclee nombre, # nómina, puesto, departamento o correo..."
+                  required
+                  helperText={!selectedEmployeeId ? "* Teclee en el recuadro para filtrar y seleccionar automáticamente al colaborador" : undefined}
+                />
               </div>
 
               {/* Accessories delivered */}

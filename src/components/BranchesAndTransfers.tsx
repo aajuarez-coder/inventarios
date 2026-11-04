@@ -137,7 +137,23 @@ export const BranchesAndTransfers: React.FC<BranchesAndTransfersProps> = ({
     longitude: -99.1677
   });
 
+  const [transferAssetSearch, setTransferAssetSearch] = useState('');
+
   const availableSourceAssets = assets.filter(a => a.branchId === sourceBranchId && a.status !== 'baja');
+
+  const filteredSourceAssets = React.useMemo(() => {
+    const q = transferAssetSearch.toLowerCase().trim();
+    if (!q) return availableSourceAssets;
+    return availableSourceAssets.filter(a =>
+      a.assetTag.toLowerCase().includes(q) ||
+      a.brand.toLowerCase().includes(q) ||
+      a.model.toLowerCase().includes(q) ||
+      a.serialNumber.toLowerCase().includes(q) ||
+      a.category.toLowerCase().includes(q) ||
+      (a.specs?.cpu && a.specs.cpu.toLowerCase().includes(q)) ||
+      (a.specs?.ram && a.specs.ram.toLowerCase().includes(q))
+    );
+  }, [availableSourceAssets, transferAssetSearch]);
 
   const handleCreateTransferSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -648,49 +664,113 @@ export const BranchesAndTransfers: React.FC<BranchesAndTransfersProps> = ({
                 </div>
               </div>
 
-              {/* Asset picker */}
+              {/* Asset picker with live typeable search filter */}
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-1.5">
                   <label className="font-semibold text-slate-800 block text-xs">
-                    Seleccionar Equipo(s) a Enviar desde {sourceBranch ? `"${sourceBranch.name}"` : 'Origen'}:
+                    Seleccionar Equipo(s) a Enviar desde {sourceBranch ? `"${sourceBranch.name}"` : 'Origen'} *
                   </label>
                   <span className="text-[11px] text-slate-500 font-medium">
-                    {selectedAssetIds.length} seleccionado(s) de {availableSourceAssets.length} disponibles
+                    {selectedAssetIds.length} de {availableSourceAssets.length} seleccionados
                   </span>
                 </div>
 
-                <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1 bg-slate-50">
+                {/* Real-time search bar for equipment */}
+                <div className="relative mb-2">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={transferAssetSearch}
+                    onChange={(e) => setTransferAssetSearch(e.target.value)}
+                    placeholder="Teclee placa, marca, modelo, serie o procesador para buscar..."
+                    className="w-full pl-8.5 pr-8 py-1.5 text-xs border border-slate-300 rounded-lg bg-slate-50 focus:bg-white text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden placeholder:text-slate-400 font-medium"
+                  />
+                  {transferAssetSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setTransferAssetSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Quick actions for filtered assets */}
+                {availableSourceAssets.length > 0 && (
+                  <div className="flex items-center justify-between text-[11px] mb-1.5 px-1 text-slate-500">
+                    <span>
+                      {filteredSourceAssets.length} equipos mostrados {transferAssetSearch ? `(filtrados por "${transferAssetSearch}")` : ''}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const idsToAdd = filteredSourceAssets.map(a => a.id);
+                          setSelectedAssetIds(Array.from(new Set([...selectedAssetIds, ...idsToAdd])));
+                        }}
+                        className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+                      >
+                        Seleccionar filtrados
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAssetIds([])}
+                        className="text-slate-500 hover:text-slate-700 cursor-pointer"
+                      >
+                        Deseleccionar todos
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1 bg-slate-50">
                   {availableSourceAssets.length === 0 ? (
-                    <p className="text-slate-500 text-[11px] p-2 text-center">
+                    <p className="text-slate-500 text-[11px] p-3 text-center">
                       No hay equipos registrados en el inventario de la sucursal de origen seleccionada.
                     </p>
+                  ) : filteredSourceAssets.length === 0 ? (
+                    <p className="text-slate-500 text-[11px] p-3 text-center">
+                      No se encontraron equipos que coincidan con "{transferAssetSearch}".
+                    </p>
                   ) : (
-                    availableSourceAssets.map(a => (
-                      <label 
-                        key={a.id} 
-                        className={`flex items-center justify-between text-slate-800 p-2 rounded-lg cursor-pointer transition-colors border ${
-                          selectedAssetIds.includes(a.id) ? 'bg-blue-50 border-blue-200 text-blue-900 font-medium' : 'hover:bg-white border-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <input
-                            type="checkbox"
-                            checked={selectedAssetIds.includes(a.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedAssetIds([...selectedAssetIds, a.id]);
-                              } else {
-                                setSelectedAssetIds(selectedAssetIds.filter(id => id !== a.id));
-                              }
-                            }}
-                            className="rounded text-[#004a99] focus:ring-[#004a99] w-4 h-4 cursor-pointer"
-                          />
-                          <span className="font-mono font-bold text-xs text-[#004a99]">[{a.assetTag}]</span>
-                          <span className="truncate">{a.brand} {a.model}</span>
-                        </div>
-                        <span className="font-mono text-[11px] text-slate-500 shrink-0 ml-2">S/N: {a.serialNumber}</span>
-                      </label>
-                    ))
+                    filteredSourceAssets.map(a => {
+                      const isChecked = selectedAssetIds.includes(a.id);
+                      return (
+                        <label 
+                          key={a.id} 
+                          className={`flex items-center justify-between text-slate-800 p-2 rounded-lg cursor-pointer transition-colors border ${
+                            isChecked ? 'bg-indigo-50 border-indigo-200 text-indigo-950 font-medium' : 'hover:bg-white border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedAssetIds([...selectedAssetIds, a.id]);
+                                } else {
+                                  setSelectedAssetIds(selectedAssetIds.filter(id => id !== a.id));
+                                }
+                              }}
+                              className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                            />
+                            <span className="font-mono font-bold text-xs text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-100">
+                              [{a.assetTag}]
+                            </span>
+                            <span className="truncate text-xs font-semibold">{a.brand} {a.model}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <span className="font-mono text-[10.5px] text-slate-500">S/N: {a.serialNumber}</span>
+                            <span className="text-[10px] uppercase font-mono px-1 py-0.2 rounded bg-slate-200 text-slate-700">
+                              {a.category}
+                            </span>
+                          </div>
+                        </label>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -953,13 +1033,24 @@ export const BranchesAndTransfers: React.FC<BranchesAndTransfersProps> = ({
               </p>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Nombre de quien recibe:</label>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Nombre de quien recibe (Colaborador / Encargado):
+                </label>
                 <input
                   type="text"
+                  list="receiving-employees-datalist"
+                  placeholder="Teclee nombre o nómina del colaborador receptor..."
                   value={receivedByName}
                   onChange={(e) => setReceivedByName(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-lg outline-hidden"
+                  className="w-full p-2.5 border border-slate-300 rounded-xl outline-hidden focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] text-xs font-medium"
                 />
+                <datalist id="receiving-employees-datalist">
+                  {employees.map(e => (
+                    <option key={e.id} value={e.fullName}>
+                      {e.fullName} ({e.position} - {e.department}) [#{e.employeeNumber}]
+                    </option>
+                  ))}
+                </datalist>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">

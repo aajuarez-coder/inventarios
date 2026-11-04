@@ -50,9 +50,18 @@ export interface HardwareAsset {
   supplier: string;
   invoiceNumber: string;
   warrantyEndDate: string;
+  warrantyUrl?: string; // URL para acceso directo a la página de garantías oficial del fabricante
   lastMaintenanceDate?: string;
   nextMaintenanceDate: string;
   maintenanceIntervalMonths: number; // e.g., 6 months
+  chargerSerial?: string; // Número de serie del cargador / adaptador eléctrico
+  chargerBrand?: string; // Marca del cargador
+  chargerModel?: string; // Modelo / Potencia del cargador
+  chargerInfo?: {
+    serialNumber: string;
+    brand: string;
+    model: string;
+  };
   accessoriesIncluded: string[]; // e.g., ["Cargador 65W", "Mochila", "Mouse inalámbrico"]
   notes?: string;
   imageUrl?: string;
@@ -71,6 +80,7 @@ export interface Employee {
   department: string;
   position: string;
   branchId: string;
+  companyId?: string; // ID de la empresa a la que pertenece el colaborador
   status: 'activo' | 'licencia' | 'baja';
   hireDate: string;
   avatarUrl?: string;
@@ -103,6 +113,7 @@ export interface MaintenanceRecord {
   description: string;
   tasksCompleted: string[];
   diagnosticScore?: number; // 1-100
+  durationMinutes?: number; // Duración técnica estimada/real (ej. 120 a 150 min)
   nextScheduledDate: string;
   status: 'completado' | 'programado' | 'cancelado';
   emailNotified: boolean;

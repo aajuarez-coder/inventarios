@@ -26,13 +26,43 @@ import {
   MapPin,
   Lock,
   RotateCcw,
-  Trash2
+  Trash2,
+  Laptop,
+  Tablet,
+  Server,
+  Globe,
+  ExternalLink,
+  Zap
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime, getWarrantyStatus, getMaintenanceStatus, getStatusBadge, getConditionLabel } from '../utils/formatters';
 import { AssetBarcode } from './AssetBarcode';
 import { AssetTraceability } from './AssetTraceability';
 import { RemoteSecurityModal } from './RemoteSecurityModal';
 import { EditAssetSpecsModal } from './EditAssetSpecsModal';
+
+const getManufacturerWarrantyUrl = (brand?: string): string | null => {
+  if (!brand) return null;
+  const b = brand.toLowerCase();
+  if (b.includes('lenovo')) return 'https://pcsupport.lenovo.com/mx/es/warranty-lookup#/';
+  if (b.includes('dell')) return 'https://www.dell.com/support/home/es-mx/products?app=warranty';
+  if (b.includes('hp') || b.includes('hewlett')) return 'https://support.hp.com/mx-es/check-warranty';
+  if (b.includes('apple')) return 'https://checkcoverage.apple.com/';
+  if (b.includes('samsung')) return 'https://www.samsung.com/mx/support/your-service/warranty-check';
+  if (b.includes('asus')) return 'https://www.asus.com/support/warranty-status-inquiry/';
+  if (b.includes('acer')) return 'https://www.acer.com/mx-es/support';
+  return null;
+};
+
+const getCategoryHeaderIcon = (category: string) => {
+  switch (category) {
+    case 'laptop': return <Laptop className="w-6 h-6" />;
+    case 'monitor': return <Monitor className="w-6 h-6" />;
+    case 'tablet': return <Tablet className="w-6 h-6" />;
+    case 'servidor': return <Server className="w-6 h-6" />;
+    case 'impresora': return <Printer className="w-6 h-6" />;
+    default: return <Cpu className="w-6 h-6" />;
+  }
+};
 
 interface AssetDetailModalProps {
   asset: HardwareAsset;
@@ -49,8 +79,8 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
   onOpenMaintenance,
   onOpenMap
 }) => {
-  const { employees, branches, timeline, assignments, currentUser, retireAsset, returnAsset, deleteAsset, canEdit } = useInventory();
-  const [currentAsset, setCurrentAsset] = useState<HardwareAsset>(asset);
+  const { assets, employees, branches, timeline, assignments, currentUser, retireAsset, returnAsset, deleteAsset, canEdit } = useInventory();
+  const currentAsset = assets.find(a => a.id === asset.id) || asset;
   const [showEditSpecs, setShowEditSpecs] = useState(false);
   const [activeTab, setActiveTab] = useState<'specs' | 'timeline' | 'tag'>('specs');
   const [retireReason, setRetireReason] = useState('');
@@ -90,7 +120,7 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
         <div className="p-5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-300">
-              <Cpu className="w-6 h-6" />
+              {getCategoryHeaderIcon(asset.category)}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -252,59 +282,182 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  <div className="p-3 rounded-lg border border-slate-200 bg-white">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Procesador (CPU)</span>
-                    <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.cpu || 'No especificado'}</p>
-                  </div>
+                {/* Dynamic Specs Grid depending on category */}
+                {currentAsset.category === 'monitor' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="p-3 rounded-lg border border-indigo-200 bg-indigo-50/40">
+                      <span className="text-[10px] text-indigo-700 uppercase font-bold flex items-center gap-1">
+                        <Monitor className="w-3 h-3 text-indigo-600" />
+                        Tamaño de Pantalla
+                      </span>
+                      <p className="text-sm font-bold text-indigo-900 mt-0.5">
+                        {currentAsset.specs.screenSize || 'No especificado'}
+                      </p>
+                    </div>
 
-                  <div className="p-3 rounded-lg border border-slate-200 bg-white">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Memoria RAM</span>
-                    <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.ram || 'No especificado'}</p>
-                  </div>
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Resolución / Gráficos</span>
+                      <p className="text-xs font-medium text-slate-800 mt-0.5">
+                        {currentAsset.specs.gpu && currentAsset.specs.gpu !== 'N/A' ? currentAsset.specs.gpu : 'Estándar / Full HD'}
+                      </p>
+                    </div>
 
-                  <div className="p-3 rounded-lg border border-slate-200 bg-white">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Almacenamiento (Disco)</span>
-                    <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.storage || 'No especificado'}</p>
-                  </div>
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Puertos / Conectividad</span>
+                      <p className="text-xs font-medium text-slate-800 mt-0.5">
+                        {currentAsset.specs.ram && currentAsset.specs.ram !== 'N/A' ? currentAsset.specs.ram : 'HDMI / DisplayPort'}
+                      </p>
+                    </div>
 
-                  <div className="p-3 rounded-lg border border-slate-200 bg-white">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Sistema Operativo</span>
-                    <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.os || 'No especificado'}</p>
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white sm:col-span-2 lg:col-span-3">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Dirección MAC / Red</span>
+                      <p className="text-xs font-mono font-medium text-slate-800 mt-0.5">{currentAsset.specs.macAddress || 'N/A'}</p>
+                    </div>
                   </div>
+                ) : currentAsset.category === 'tablet' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="p-3 rounded-lg border border-indigo-200 bg-indigo-50/40">
+                      <span className="text-[10px] text-indigo-700 uppercase font-bold flex items-center gap-1">
+                        <Tablet className="w-3 h-3 text-indigo-600" />
+                        Tamaño de Pantalla
+                      </span>
+                      <p className="text-sm font-bold text-indigo-900 mt-0.5">
+                        {currentAsset.specs.screenSize || 'No especificado'}
+                      </p>
+                    </div>
 
-                  <div className="p-3 rounded-lg border border-slate-200 bg-white">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Pantalla / Gráficos</span>
-                    <p className="text-xs font-medium text-slate-800 mt-0.5">
-                      {currentAsset.specs.screenSize ? `${currentAsset.specs.screenSize}` : (currentAsset.specs.gpu || 'Integrado')}
-                    </p>
-                  </div>
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Almacenamiento (Disco)</span>
+                      <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.storage || 'No especificado'}</p>
+                    </div>
 
-                  <div className="p-3 rounded-lg border border-slate-200 bg-white">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Dirección MAC / Red</span>
-                    <p className="text-xs font-mono font-medium text-slate-800 mt-0.5">{currentAsset.specs.macAddress || 'N/A'}</p>
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Sistema Operativo</span>
+                      <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.os || 'iPadOS / Android'}</p>
+                    </div>
+
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Procesador (Chip)</span>
+                      <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.cpu || 'No especificado'}</p>
+                    </div>
+
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Memoria RAM</span>
+                      <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.ram || 'No especificado'}</p>
+                    </div>
+
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Dirección MAC / WiFi</span>
+                      <p className="text-xs font-mono font-medium text-slate-800 mt-0.5">{currentAsset.specs.macAddress || 'N/A'}</p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Procesador (CPU)</span>
+                      <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.cpu || 'No especificado'}</p>
+                    </div>
+
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Memoria RAM</span>
+                      <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.ram || 'No especificado'}</p>
+                    </div>
+
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Almacenamiento (Disco)</span>
+                      <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.storage || 'No especificado'}</p>
+                    </div>
+
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Sistema Operativo</span>
+                      <p className="text-xs font-medium text-slate-800 mt-0.5">{currentAsset.specs.os || 'No especificado'}</p>
+                    </div>
+
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                        {currentAsset.category === 'laptop' ? 'Pantalla / Gráficos' : 'Gráficos / GPU'}
+                      </span>
+                      <p className="text-xs font-medium text-slate-800 mt-0.5">
+                        {currentAsset.specs.screenSize ? currentAsset.specs.screenSize : (currentAsset.specs.gpu || 'Integrado')}
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold">Dirección MAC / Red</span>
+                      <p className="text-xs font-mono font-medium text-slate-800 mt-0.5">{currentAsset.specs.macAddress || 'N/A'}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Maintenance & Warranty status */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
-                {/* Warranty status card */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-white">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                      Garantía del Fabricante
-                    </span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${warranty.badgeClass}`}>
-                      {warranty.label}
-                    </span>
+                {/* Warranty status card with URL link */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-white flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                        Garantía del Fabricante
+                      </span>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${warranty.badgeClass}`}>
+                        {warranty.label}
+                      </span>
+                    </div>
+                    <div className="text-xs space-y-1 text-slate-600">
+                      <p>Fecha fin de póliza: <strong className="text-slate-800">{formatDate(asset.warrantyEndDate)}</strong></p>
+                      <p>Proveedor autorizado: <span className="text-slate-800">{asset.supplier}</span></p>
+                      <p>Factura de compra: <span className="font-mono text-slate-700">{asset.invoiceNumber}</span></p>
+                    </div>
                   </div>
-                  <div className="text-xs space-y-1 text-slate-600">
-                    <p>Fecha fin de póliza: <strong className="text-slate-800">{formatDate(asset.warrantyEndDate)}</strong></p>
-                    <p>Proveedor autorizado: <span className="text-slate-800">{asset.supplier}</span></p>
-                    <p>Factura de compra: <span className="font-mono text-slate-700">{asset.invoiceNumber}</span></p>
+
+                  {/* Warranty portal URL link & shortcuts */}
+                  <div className="mt-3 pt-2.5 border-t border-slate-100">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                      Página de Garantías Oficial
+                    </span>
+                    {currentAsset.warrantyUrl ? (
+                      <a
+                        href={currentAsset.warrantyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-between gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-200 transition-colors w-full group cursor-pointer"
+                        title={currentAsset.warrantyUrl}
+                      >
+                        <span className="inline-flex items-center gap-1.5 truncate max-w-[220px]">
+                          <Globe className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span className="truncate">{currentAsset.warrantyUrl}</span>
+                        </span>
+                        <ExternalLink className="w-3.5 h-3.5 text-indigo-500 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                      </a>
+                    ) : getManufacturerWarrantyUrl(currentAsset.brand) ? (
+                      <a
+                        href={getManufacturerWarrantyUrl(currentAsset.brand)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-between gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200 transition-colors w-full group cursor-pointer"
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Globe className="w-3.5 h-3.5 text-slate-500" />
+                          Consultar en portal {currentAsset.brand}
+                        </span>
+                        <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                      </a>
+                    ) : (
+                      <div className="flex items-center justify-between text-xs text-slate-400 italic">
+                        <span>Sin URL de garantía registrada</span>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => setShowEditSpecs(true)}
+                            className="text-[11px] text-indigo-600 hover:text-indigo-800 not-italic font-medium underline cursor-pointer"
+                          >
+                            + Añadir URL
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -327,6 +480,41 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
                 </div>
 
               </div>
+
+              {/* Charger / Adaptador de Corriente info */}
+              {(currentAsset.chargerSerial || currentAsset.chargerBrand || currentAsset.chargerModel || currentAsset.chargerInfo) && (
+                <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/60">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-amber-950 uppercase tracking-wide flex items-center gap-1.5 font-mono">
+                      <Zap className="w-3.5 h-3.5 text-amber-600" />
+                      Cargador / Adaptador Eléctrico Asociado
+                    </span>
+                    <span className="text-[10px] bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded border border-amber-300">
+                      Anexo en Responsiva
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold block">Serie del Cargador (S/N)</span>
+                      <strong className="font-mono text-slate-900 mt-0.5 block">
+                        {currentAsset.chargerSerial || currentAsset.chargerInfo?.serialNumber || 'N/A'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold block">Marca</span>
+                      <p className="font-medium text-slate-800 mt-0.5">
+                        {currentAsset.chargerBrand || currentAsset.chargerInfo?.brand || currentAsset.brand}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold block">Modelo / Potencia</span>
+                      <p className="font-medium text-slate-800 mt-0.5">
+                        {currentAsset.chargerModel || currentAsset.chargerInfo?.model || 'Estándar Fabricante'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Accessories delivered */}
               <div>
@@ -675,8 +863,8 @@ export const AssetDetailModal: React.FC<AssetDetailModalProps> = ({
         <EditAssetSpecsModal
           asset={currentAsset}
           onClose={() => setShowEditSpecs(false)}
-          onSuccess={(updated) => {
-            setCurrentAsset(updated);
+          onSuccess={() => {
+            setShowEditSpecs(false);
           }}
         />
       )}

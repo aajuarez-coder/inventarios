@@ -39,6 +39,7 @@ export const EmailSimulatorModal: React.FC<EmailSimulatorModalProps> = ({
 
   const [customDate, setCustomDate] = useState(scheduledDate || asset.nextMaintenanceDate || '2026-10-22');
   const [locationRoom, setLocationRoom] = useState('Taller de Soporte Técnico TI (Piso 14 / Planta Baja)');
+  const [estimatedDuration, setEstimatedDuration] = useState('120 a 150 minutos (2 a 2.5 horas)');
   const [backupNote, setBackupNote] = useState(true);
   const [chargerNote, setChargerNote] = useState(true);
   const [additionalNote, setAdditionalNote] = useState('');
@@ -65,10 +66,11 @@ export const EmailSimulatorModal: React.FC<EmailSimulatorModalProps> = ({
         locationRoom,
         backupNote,
         chargerNote,
+        estimatedDuration,
         additionalInstructions: additionalNote.trim() || undefined
       });
 
-      const summary = `Destinatario: ${empName} <${empEmail}>\nAsunto: ${emailSubject}\nFecha programada: ${formatDate(customDate)}\nUbicación: ${locationRoom}`;
+      const summary = `Destinatario: ${empName} <${empEmail}>\nAsunto: ${emailSubject}\nFecha programada: ${formatDate(customDate)}\nDuración: ${estimatedDuration}\nUbicación: ${locationRoom}`;
 
       const res = await sendEmailWithConfirmation(
         {
@@ -199,9 +201,9 @@ export const EmailSimulatorModal: React.FC<EmailSimulatorModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
             <div>
-              <label className="font-semibold text-slate-600 block mb-0.5">Fecha y Hora Programada:</label>
+              <label className="font-semibold text-slate-600 block mb-0.5">Fecha Programada:</label>
               <input
                 type="date"
                 value={customDate}
@@ -217,6 +219,19 @@ export const EmailSimulatorModal: React.FC<EmailSimulatorModalProps> = ({
                 onChange={(e) => setLocationRoom(e.target.value)}
                 className="w-full p-2 border border-slate-300 rounded-lg bg-white text-xs outline-hidden"
               />
+            </div>
+            <div>
+              <label className="font-semibold text-slate-600 block mb-0.5">Duración Estimada del Servicio:</label>
+              <select
+                value={estimatedDuration}
+                onChange={(e) => setEstimatedDuration(e.target.value)}
+                className="w-full p-2 border border-slate-300 rounded-lg bg-white text-xs outline-hidden font-semibold text-indigo-900"
+              >
+                <option value="120 a 150 minutos (2 a 2.5 horas)">120 a 150 min (2 a 2.5 horas - Extendido TI)</option>
+                <option value="120 minutos (2 horas)">120 min (2 horas)</option>
+                <option value="150 minutos (2.5 horas)">150 min (2.5 horas)</option>
+                <option value="180 minutos (3 horas)">180 min (3 horas - Servicio Mayor)</option>
+              </select>
             </div>
           </div>
 
@@ -310,7 +325,7 @@ export const EmailSimulatorModal: React.FC<EmailSimulatorModalProps> = ({
                   </li>
                 )}
                 <li>
-                  <strong>Duración estimada:</strong> El servicio preventivo (limpieza interna, cambio de pasta térmica, actualización y diagnóstico) toma de 45 a 60 minutos.
+                  <strong>Duración estimada:</strong> El servicio preventivo (limpieza interna, cambio de pasta térmica, actualización y diagnóstico) toma de <strong>{estimatedDuration}</strong>.
                 </li>
                 <li>
                   <strong>Lugar:</strong> Favor de acudir a: <em>{locationRoom}</em>.
