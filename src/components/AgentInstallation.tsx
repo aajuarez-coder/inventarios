@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useInventory, safeLocalStorageSetItem } from '../context/InventoryContext';
 import { HardwareAsset, AssetCategory, BitLockerStatus } from '../types/inventory';
+import { getOfficialCost } from '../utils/hardwareCosts';
 import { 
   Terminal, 
   Download, 
@@ -1254,7 +1255,7 @@ try {
       assignedToEmployeeId: assignedEmployeeId,
       locationDetails: `Almacén/Sede ${assignedBranch?.name || agent.branchName}`,
       purchaseDate: new Date().toISOString().split('T')[0],
-      purchaseCost: cat === 'laptop' ? 24500 : cat === 'servidor' ? 68000 : 18500,
+      purchaseCost: getOfficialCost(cat, agent.platform === 'windows' ? 'Dell / Lenovo' : 'Apple', agent.osVersion) ?? (cat === 'laptop' ? 15750 : cat === 'servidor' ? 68000 : cat === 'desktop' ? 8000 : 18500),
       currency: 'MXN',
       supplier: 'Autodescubrimiento Agente Petroil Cloud',
       invoiceNumber: `AGT-AUTO-${Date.now().toString().slice(-6)}`,

@@ -23,7 +23,11 @@ import {
   Check,
   ChevronDown,
   UserCheck,
-  Briefcase
+  Briefcase,
+  ExternalLink,
+  AlertCircle,
+  Send,
+  Zap
 } from 'lucide-react';
 import { formatDate, formatDateTime } from '../utils/formatters';
 import { DigitalSignaturePad } from './DigitalSignaturePad';
@@ -50,9 +54,11 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
     assets, 
     employees, 
     branches, 
+    companies,
     createAssignment, 
     signResponsiva, 
     returnAsset, 
+    sendResponsivaEmailAlert,
     currentUser,
     canEdit,
     isViewer
@@ -61,7 +67,10 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
   const {
     isConnected: isGmailConnected,
     connectGoogle,
-    sendEmailWithConfirmation
+    sendEmailWithConfirmation,
+    sendDirectEmail,
+    gmailProfile,
+    isConnecting: isConnectingGmail
   } = useGmail();
 
   const [search, setSearch] = useState('');
@@ -70,6 +79,14 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
   const [showNewAssignmentModal, setShowNewAssignmentModal] = useState(Boolean(preselectedAsset || preselectedEmployee));
   const [signingAssignment, setSigningAssignment] = useState<Assignment | null>(null);
   const [returnAssignmentModal, setReturnAssignmentModal] = useState<Assignment | null>(null);
+
+  // Responsiva Email Modal state
+  const [emailModalAssignment, setEmailModalAssignment] = useState<Assignment | null>(null);
+  const [emailRecipient, setEmailRecipient] = useState('');
+  const [emailCc, setEmailCc] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailCustomNotes, setEmailCustomNotes] = useState('');
+  const [emailDispatchStatus, setEmailDispatchStatus] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   // New assignment form state
   const [selectedAssetId, setSelectedAssetId] = useState<string>(preselectedAsset?.id || '');
@@ -277,52 +294,152 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
     await exportResponsivaToPDF('printable-responsiva-sheet', asg, asset, emp, branch, true);
   };
 
-  const handleSendResponsivaByGmail = async (asg: Assignment) => {
+  const handleOpenResponsivaEmailModal = (asg: Assignment) => {
     const asset = assets.find(a => a.id === asg.assetId);
     const emp = employees.find(e => e.id === asg.employeeId);
-    if (!emp || !asset) return;
+    setEmailModalAssignment(asg);
+    setEmailRecipient(emp?.email || '');
+    setEmailCc('soporte-ti@petroil.com.mx');
+    setEmailSubject(`[Petroil TI] Carta Responsiva Oficial de Entrega de Equipo - Folio ${asg.folioResponsiva} (${asset?.assetTag || 'TI'})`);
+    setEmailCustomNotes(asg.conditionNotes || '');
+    setEmailDispatchStatus(null);
+  };
 
+  const handleSendResponsivaByGmail = (asg: Assignment) => {
+    handleOpenResponsivaEmailModal(asg);
+  };
+
+  const webGmailResponsivaUrl = useMemo(() => {
+    if (!emailModalAssignment) return '';
+    const asg = emailModalAssignment;
+    const asset = assets.find(a => a.id === asg.assetId);
+    const emp = employees.find(e => e.id === asg.employeeId);
+    const chargerText = (asset?.chargerSerial || asset?.chargerInfo?.serialNumber)
+      ? `\n• Cargador Original Serie: ${asset?.chargerSerial || asset?.chargerInfo?.serialNumber} (${asset?.chargerBrand || asset?.chargerInfo?.brand || ''} ${asset?.chargerModel || asset?.chargerInfo?.model || ''})`
+      : '';
+    const specsText = (asset?.specs?.cpu || asset?.specs?.ram || asset?.specs?.storage)
+      ? `\n• Especificaciones: ${asset?.specs?.cpu || ''} / ${asset?.specs?.ram || ''} RAM / ${asset?.specs?.storage || ''}`
+      : '';
+
+    const bodyText = `Estimado(a) ${emp?.fullName || 'Colaborador(a)'},\n\nPor medio del presente correo institucional, el Departamento de Tecnologías de la Información le hace entrega formal del siguiente activo informático bajo su resguardo:\n\n• Folio Oficial: ${asg.folioResponsiva}\n• Placa / Asset Tag: ${asset?.assetTag || 'N/A'}\n• Equipo y Modelo: ${asset?.brand || ''} ${asset?.model || ''}\n• Número de Serie (S/N): ${asset?.serialNumber || 'N/A'}\n• Categoría: ${asset?.category || 'Cómputo'}${specsText}${chargerText}\n• Accesorios Entregados: ${asg.accessoriesDelivered.join(', ')}\n${emailCustomNotes ? `• Observaciones: ${emailCustomNotes}\n` : ''}\nFavor de verificar las condiciones físicas y operativas del equipo y validar la firma de su Carta Responsiva.\n\nAtentamente,\n${currentUser.name}\nTecnologías de la Información • Grupo Petroil`;
+
+    const params = new URLSearchParams();
+    params.set('view', 'cm');
+    params.set('fs', '1');
+    if (emailRecipient) params.set('to', emailRecipient);
+    if (emailCc) params.set('cc', emailCc);
+    if (emailSubject) params.set('su', emailSubject);
+    params.set('body', bodyText);
+    return `https://mail.google.com/mail/?${params.toString()}`;
+  }, [emailModalAssignment, assets, employees, emailRecipient, emailCc, emailSubject, emailCustomNotes, currentUser.name]);
+
+  const handleSendResponsivaViaGmailApi = async () => {
+    if (!emailModalAssignment) return;
+    const asg = emailModalAssignment;
+    const asset = assets.find(a => a.id === asg.assetId);
+    const emp = employees.find(e => e.id === asg.employeeId);
+    const company = companies.find(c => c.id === emp?.companyId);
+    const branch = branches.find(b => b.id === emp?.branchId);
+    if (!asset) return;
+
+    if (!emailRecipient.trim()) {
+      setEmailDispatchStatus({ type: 'error', text: 'Por favor especifique el correo del destinatario.' });
+      return;
+    }
+
+    setIsSendingGmail(true);
+    setEmailDispatchStatus(null);
+
+    // If not connected, connect Google
     if (!isGmailConnected) {
       const success = await connectGoogle();
       if (!success) {
-        showPrintNotification('Inicie sesión con su cuenta Google para enviar la carta responsiva vía Gmail.');
+        setIsSendingGmail(false);
+        setEmailDispatchStatus({
+          type: 'error',
+          text: 'No se pudo conectar con Google. Puede usar el botón "Abrir en Gmail Web" para redactar en su navegador o "Registrar Envío Institucional".'
+        });
         return;
       }
     }
 
-    const htmlBody = EmailTemplates.responsivaDelivery({
-      employeeName: emp.fullName,
-      employeeEmail: emp.email,
-      folio: asg.folioResponsiva,
-      assignedDate: formatDate(asg.assignedDate),
-      assetTag: asset.assetTag,
-      assetBrandModel: `${asset.brand} ${asset.model}`,
-      serialNumber: asset.serialNumber,
-      category: asset.category,
-      condition: asset.physicalCondition,
-      accessories: asg.accessoriesDelivered,
-      itStaffName: asg.itStaffName || currentUser.name
-    });
+    try {
+      const htmlBody = EmailTemplates.responsivaDelivery({
+        employeeName: emp?.fullName || 'Colaborador(a)',
+        employeeEmail: emailRecipient.trim(),
+        folio: asg.folioResponsiva,
+        assignedDate: formatDate(asg.assignedDate),
+        assetTag: asset.assetTag,
+        assetBrandModel: `${asset.brand} ${asset.model}`,
+        serialNumber: asset.serialNumber,
+        category: asset.category,
+        condition: asset.physicalCondition,
+        accessories: asg.accessoriesDelivered,
+        itStaffName: asg.itStaffName || currentUser.name,
+        companyName: company?.name,
+        branchName: branch?.name,
+        specs: {
+          cpu: asset.specs?.cpu,
+          ram: asset.specs?.ram,
+          storage: asset.specs?.storage,
+          os: asset.specs?.os,
+          screenSize: asset.specs?.screenSize
+        },
+        charger: {
+          serial: asset.chargerSerial || asset.chargerInfo?.serialNumber,
+          brand: asset.chargerBrand || asset.chargerInfo?.brand,
+          model: asset.chargerModel || asset.chargerInfo?.model
+        },
+        notes: emailCustomNotes.trim() || undefined,
+        isSigned: Boolean(asg.employeeSignatureUrl)
+      });
 
-    const summary = `Destinatario: ${emp.fullName} <${emp.email}>\nAsunto: [Petroil TI] Asignación de Equipo y Carta Responsiva - Folio ${asg.folioResponsiva}\nEquipo: [${asset.assetTag}] ${asset.brand} ${asset.model}\nSerie: ${asset.serialNumber}`;
+      const summary = `Destinatario: ${emp?.fullName || ''} <${emailRecipient}>\nAsunto: ${emailSubject}\nEquipo: [${asset.assetTag}] ${asset.brand} ${asset.model}\nSerie: ${asset.serialNumber}`;
 
-    setIsSendingGmail(true);
-    const res = await sendEmailWithConfirmation(
-      {
-        to: emp.email,
-        subject: `[Petroil TI] Asignación de Equipo y Carta Responsiva - Folio ${asg.folioResponsiva}`,
-        htmlBody
-      },
-      summary
-    );
-    setIsSendingGmail(false);
+      const res = await sendEmailWithConfirmation(
+        {
+          to: emailRecipient.trim(),
+          cc: emailCc.trim() || undefined,
+          subject: emailSubject,
+          htmlBody
+        },
+        summary
+      );
 
-    if (res.success) {
-      confetti({ particleCount: 70, spread: 60 });
-      showPrintNotification(`¡Carta Responsiva ${asg.folioResponsiva} enviada a ${emp.email} vía Gmail!`);
-    } else if (res.error && !res.error.includes('cancelada')) {
-      showPrintNotification(`Error al enviar por Gmail: ${res.error}`);
+      if (res.success) {
+        confetti({ particleCount: 75, spread: 65, origin: { y: 0.6 } });
+        sendResponsivaEmailAlert(asg.id, emailCustomNotes, 'gmail_api');
+        setEmailDispatchStatus({
+          type: 'success',
+          text: `¡Carta Responsiva oficial ${asg.folioResponsiva} enviada exitosamente a ${emailRecipient} vía Gmail API!`
+        });
+        showPrintNotification(`Carta Responsiva ${asg.folioResponsiva} enviada a ${emailRecipient} vía Gmail.`);
+        setTimeout(() => {
+          setEmailModalAssignment(null);
+        }, 2200);
+      } else if (res.error && !res.error.includes('cancelada')) {
+        setEmailDispatchStatus({ type: 'error', text: `Error al enviar por Gmail API: ${res.error}` });
+      }
+    } catch (err: any) {
+      setEmailDispatchStatus({ type: 'error', text: err?.message || 'Error al procesar el envío de responsiva.' });
+    } finally {
+      setIsSendingGmail(false);
     }
+  };
+
+  const handleInstitutionalDispatchOnly = () => {
+    if (!emailModalAssignment) return;
+    const asg = emailModalAssignment;
+    sendResponsivaEmailAlert(asg.id, emailCustomNotes, 'institucional');
+    confetti({ particleCount: 50, spread: 50 });
+    setEmailDispatchStatus({
+      type: 'success',
+      text: `Se registró formalmente el envío de la responsiva ${asg.folioResponsiva} en la bitácora institucional y auditoría TI.`
+    });
+    showPrintNotification(`Notificación de responsiva ${asg.folioResponsiva} registrada en bitácora.`);
+    setTimeout(() => {
+      setEmailModalAssignment(null);
+    }, 1800);
   };
 
 
@@ -1101,6 +1218,289 @@ export const AssignmentsManager: React.FC<AssignmentsManagerProps> = ({
           </div>
         </div>
       )}
+
+      {/* Responsiva Email Modal */}
+      {emailModalAssignment && (() => {
+        const asg = emailModalAssignment;
+        const asset = assets.find(a => a.id === asg.assetId);
+        const emp = employees.find(e => e.id === asg.employeeId);
+        const company = companies.find(c => c.id === emp?.companyId);
+        const branch = branches.find(b => b.id === emp?.branchId);
+        const isSigned = Boolean(asg.employeeSignatureUrl);
+        const hasCharger = Boolean(asset?.chargerSerial || asset?.chargerInfo?.serialNumber || asset?.chargerBrand);
+
+        return (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 no-print">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-300 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 max-h-[92vh]">
+              
+              {/* Header */}
+              <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-red-600/30 text-red-400 border border-red-500/30">
+                    <Mail className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-sky-400 font-bold">{asg.folioResponsiva}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isSigned ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}`}>
+                        {isSigned ? 'Firmada' : 'Pendiente de Firma'}
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-sm text-white">Notificar Carta Responsiva por Gmail</h3>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setEmailModalAssignment(null)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Body Form */}
+              <div className="p-5 overflow-y-auto space-y-4 text-xs">
+                
+                {/* Feedback Status */}
+                {emailDispatchStatus && (
+                  <div className={`p-3 rounded-xl flex items-center gap-2 ${
+                    emailDispatchStatus.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : emailDispatchStatus.type === 'error'
+                      ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                      : 'bg-sky-50 text-sky-800 border border-sky-200'
+                  }`}>
+                    {emailDispatchStatus.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                    )}
+                    <span className="font-medium text-xs">{emailDispatchStatus.text}</span>
+                  </div>
+                )}
+
+                {/* Google Connection Pill */}
+                <div className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                  isGmailConnected ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900' : 'bg-amber-50/70 border-amber-200 text-amber-900'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {isGmailConnected ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    )}
+                    <div>
+                      <p className="font-semibold text-xs">
+                        {isGmailConnected ? 'Google Workspace Conectado' : 'Cuenta de Google no conectada'}
+                      </p>
+                      <p className="text-[11px] opacity-80">
+                        {isGmailConnected 
+                          ? `Enviando desde: ${gmailProfile?.emailAddress || 'Cuenta corporativa'}`
+                          : 'Puede conectar su cuenta para enviar con un clic o abrir el borrador en Gmail Web.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {!isGmailConnected && (
+                    <button
+                      type="button"
+                      onClick={() => connectGoogle()}
+                      disabled={isConnectingGmail}
+                      className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 transition-colors shadow-xs cursor-pointer"
+                    >
+                      {isConnectingGmail ? 'Conectando...' : 'Conectar con Google'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Recipient Email */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800">Para (Correo del Colaborador): *</label>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      {emp ? `${emp.fullName} (${emp.position})` : ''}
+                    </span>
+                  </div>
+                  <input
+                    type="email"
+                    value={emailRecipient}
+                    onChange={(e) => setEmailRecipient(e.target.value)}
+                    placeholder="colaborador@petroil.com.mx"
+                    required
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white font-mono text-sm text-slate-900 focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-none caret-[#ff8200]"
+                  />
+                </div>
+
+                {/* Cc Email */}
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-800">Con Copia (Cc - Mesa de Ayuda TI):</label>
+                  <input
+                    type="text"
+                    value={emailCc}
+                    onChange={(e) => setEmailCc(e.target.value)}
+                    placeholder="soporte-ti@petroil.com.mx"
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white font-mono text-sm text-slate-900 focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-none caret-[#ff8200]"
+                  />
+                </div>
+
+                {/* Subject */}
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-800">Asunto Oficial:</label>
+                  <input
+                    type="text"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl bg-white font-semibold text-sm text-slate-900 focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-none caret-[#ff8200]"
+                  />
+                </div>
+
+                {/* Asset & Charger Preview Card */}
+                {asset && (
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                      <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px]">
+                        📦 Resumen del Equipo a Notificar
+                      </span>
+                      <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                        TAG: {asset.assetTag}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11.5px] text-slate-700">
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">Equipo:</span>
+                        <strong className="text-slate-900">{asset.brand} {asset.model}</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">Número de Serie (S/N):</span>
+                        <span className="font-mono text-slate-800">{asset.serialNumber}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">Categoría:</span>
+                        <span className="capitalize">{asset.category}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">Sede / Filial:</span>
+                        <span>{company?.name || 'Petroil'} • {branch?.name || 'Corporativo'}</span>
+                      </div>
+
+                      {/* Specs */}
+                      {(asset.specs.cpu || asset.specs.ram || asset.specs.storage) && (
+                        <div className="col-span-2 pt-1 border-t border-slate-100 flex items-center gap-2 flex-wrap text-[11px] text-slate-600">
+                          {asset.specs.cpu && <span><strong>CPU:</strong> {asset.specs.cpu}</span>}
+                          {asset.specs.ram && <span>• <strong>RAM:</strong> {asset.specs.ram}</span>}
+                          {asset.specs.storage && <span>• <strong>Disco:</strong> {asset.specs.storage}</span>}
+                          {asset.specs?.screenSize && (
+                            <span>• <strong>Pantalla:</strong> {asset.specs.screenSize}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Charger info */}
+                      {hasCharger && (
+                        <div className="col-span-2 pt-1.5 mt-1 border-t border-amber-200/60 bg-amber-50/80 p-2 rounded-lg text-amber-900 text-[11px] flex items-center justify-between">
+                          <div>
+                            <span className="font-bold flex items-center gap-1 text-[10.5px]">
+                              ⚡ Cargador de Corriente Oficial:
+                            </span>
+                            <span className="font-mono text-slate-900">
+                              S/N: {asset.chargerSerial || asset.chargerInfo?.serialNumber || 'Original'}
+                            </span>
+                            <span className="text-slate-600 ml-1">
+                              ({asset.chargerBrand || asset.chargerInfo?.brand || asset.brand} {asset.chargerModel || asset.chargerInfo?.model || ''})
+                            </span>
+                          </div>
+                          <span className="text-[10px] bg-amber-200/60 font-semibold px-2 py-0.5 rounded text-amber-900">
+                            Incluido
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Accessories */}
+                      <div className="col-span-2 pt-1 text-[11px] text-slate-600">
+                        <span className="text-slate-400 block text-[10px]">Accesorios Entregados:</span>
+                        <span>{asg.accessoriesDelivered.join(', ') || 'Sin accesorios adicionales'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Additional Notes */}
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-800">Instrucciones u Observaciones Adicionales (Opcional):</label>
+                  <textarea
+                    rows={2}
+                    value={emailCustomNotes}
+                    onChange={(e) => setEmailCustomNotes(e.target.value)}
+                    placeholder="Ej. Favor de acudir a firmar físicamente o ingresar al portal para completar la firma digital..."
+                    className="w-full p-3 border border-slate-300 rounded-xl bg-white text-slate-900 text-xs focus:ring-2 focus:ring-[#ff8200]/25 focus:border-[#ff8200] outline-none caret-[#ff8200]"
+                  />
+                </div>
+
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-[11px] text-slate-500">
+                  <span>Todas las acciones registran automáticamente el acuse en la bitácora y auditoría TI.</span>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                  
+                  {/* Web Gmail Fallback */}
+                  <a
+                    href={webGmailResponsivaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => {
+                      sendResponsivaEmailAlert(asg.id, emailCustomNotes, 'gmail_web');
+                      showPrintNotification(`Borrador de responsiva ${asg.folioResponsiva} abierto en Gmail Web y registrado en auditoría.`);
+                    }}
+                    className="px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Abre la ventana oficial de redactar en mail.google.com con todos los datos y cargador precargados"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Abrir en Gmail Web</span>
+                  </a>
+
+                  {/* Institutional Logger Fallback */}
+                  <button
+                    type="button"
+                    onClick={handleInstitutionalDispatchOnly}
+                    className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs transition-colors cursor-pointer"
+                    title="Registra el acuse de entrega en la bitácora de TI sin enviar por API"
+                  >
+                    Registrar en Bitácora TI
+                  </button>
+
+                  {/* Primary Gmail API Send */}
+                  <button
+                    type="button"
+                    onClick={handleSendResponsivaViaGmailApi}
+                    disabled={isSendingGmail || isConnectingGmail}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold text-xs shadow-xs cursor-pointer transition-all"
+                    title="Envía el correo directamente utilizando la API oficial de Gmail"
+                  >
+                    {isSendingGmail ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Enviando por Gmail...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        <span>{isGmailConnected ? 'Enviar vía Gmail API' : 'Conectar y Enviar'}</span>
+                      </>
+                    )}
+                  </button>
+
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

@@ -39,8 +39,10 @@ import {
   saveDocumentToFirestore, 
   saveBatchToFirestore, 
   deleteDocumentFromFirestore, 
-  sanitizeForFirestore 
+  sanitizeForFirestore,
+  syncOfficialHardwareCostsInFirestore 
 } from '../services/firestoreService';
+import { getExpectedOfficialCost } from '../utils/hardwareCosts';
 
 interface InventoryContextType {
   assets: HardwareAsset[];
@@ -81,6 +83,7 @@ interface InventoryContextType {
   updateAsset: (id: string, updates: Partial<HardwareAsset>) => void;
   deleteAsset: (id: string) => void;
   retireAsset: (id: string, reason: string) => void;
+  syncOfficialHardwareCosts: () => Promise<{ updatedCount: number; addedCount: number }>;
   
   // Employee actions
   addEmployee: (employee: Omit<Employee, 'id'>) => Employee;
@@ -110,6 +113,11 @@ interface InventoryContextType {
   // Email Notifications
   sendMaintenanceEmailAlert: (assetId: string, scheduledDate?: string, customNote?: string) => EmailNotification;
   sendWarrantyEmailAlert: (assetId: string) => EmailNotification;
+  sendResponsivaEmailAlert: (
+    assignmentId: string,
+    customNotes?: string,
+    deliveryChannel?: 'gmail_api' | 'gmail_web' | 'institucional'
+  ) => EmailNotification | null;
   
   // Transfers
   createTransfer: (transfer: Omit<Transfer, 'id' | 'folio'>) => Transfer;
@@ -835,6 +843,24 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  const syncOfficialHardwareCosts = async (): Promise<{ updatedCount: number; addedCount: number }> => {
+    setIsCloudSyncing(true);
+    try {
+      const res = await syncOfficialHardwareCostsInFirestore();
+      setAssets(prev => prev.map(a => {
+        const expected = getExpectedOfficialCost(a);
+        if (expected !== null && a.purchaseCost !== expected) {
+          return { ...a, purchaseCost: expected };
+        }
+        return a;
+      }));
+      setLastCloudSyncTime(new Date().toLocaleTimeString());
+      return res;
+    } finally {
+      setTimeout(() => setIsCloudSyncing(false), 700);
+    }
+  };
+
   const setUserRole = (role: UserRole) => {
     if (isAuthenticated) {
       console.warn('[Seguridad Petroil] Cambio de rol no permitido en una sesión activa de usuario registrado.');
@@ -1366,6 +1392,53 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     setEmailLogs(prev => [newNotification, ...prev]);
     saveDocumentToFirestore(COLLECTIONS.EMAIL_LOGS, newNotification.id, newNotification);
+    triggerCloudSyncAnimation();
+    return newNotification;
+  };
+
+  const sendResponsivaEmailAlert = (
+    assignmentId: string,
+    customNotes?: string,
+    deliveryChannel: 'gmail_api' | 'gmail_web' | 'institucional' = 'gmail_api'
+  ): EmailNotification | null => {
+    const asg = assignments.find(a => a.id === assignmentId);
+    if (!asg) return null;
+    const asset = assets.find(a => a.id === asg.assetId);
+    const employee = employees.find(e => e.id === asg.employeeId);
+    if (!employee) return null;
+
+    const channelLabel = deliveryChannel === 'gmail_api' 
+      ? 'Gmail API' 
+      : deliveryChannel === 'gmail_web' 
+      ? 'Gmail Web' 
+      : 'Notificación Institucional TI';
+
+    const newNotification: EmailNotification = {
+      id: `em-resp-${Date.now()}`,
+      toEmail: employee.email,
+      toName: employee.fullName,
+      assetTag: asset?.assetTag || 'EQ-GENERAL',
+      assetName: asset ? `${asset.brand} ${asset.model}` : 'Equipo de Cómputo',
+      subject: `[Petroil TI] Carta Responsiva Oficial - Folio ${asg.folioResponsiva} (${asset?.assetTag || ''})`,
+      type: 'responsiva_pendiente',
+      sentAt: new Date().toISOString(),
+      status: 'enviado',
+      contentSnippet: `Entrega formal de equipo ${asset?.brand || ''} ${asset?.model || ''} (S/N: ${asset?.serialNumber || 'N/A'}, Placa: ${asset?.assetTag || ''}) a ${employee.fullName}. Folio: ${asg.folioResponsiva}. Canal: ${channelLabel}.${customNotes ? ` Nota: ${customNotes}` : ''}`
+    };
+
+    setEmailLogs(prev => [newNotification, ...prev]);
+    saveDocumentToFirestore(COLLECTIONS.EMAIL_LOGS, newNotification.id, newNotification);
+
+    if (asset) {
+      logEvent({
+        assetId: asset.id,
+        type: 'asignacion',
+        title: `Carta Responsiva Notificada por Correo (${channelLabel})`,
+        description: `Se notificó la responsiva ${asg.folioResponsiva} a ${employee.fullName} (${employee.email}) vía ${channelLabel}.`,
+        author: currentUser.name
+      });
+    }
+
     triggerCloudSyncAnimation();
     return newNotification;
   };
@@ -2216,6 +2289,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         completeMaintenance,
         sendMaintenanceEmailAlert,
         sendWarrantyEmailAlert,
+        sendResponsivaEmailAlert,
         createTransfer,
         confirmTransferArrival,
         addBranch,
@@ -2240,7 +2314,8 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         exportDataJSON,
         importDataJSON,
         resetToDefaults,
-        forceCloudSync
+        forceCloudSync,
+        syncOfficialHardwareCosts
       }}
     >
       {children}

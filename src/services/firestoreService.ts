@@ -37,6 +37,7 @@ import {
   INITIAL_LOANS,
   INITIAL_COMPANIES 
 } from '../data/mockData';
+import { getExpectedOfficialCost } from '../utils/hardwareCosts';
 
 // Re-use or initialize Firebase app
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -151,6 +152,38 @@ export async function seedInitialFirestoreDataIfEmpty() {
         }
       } catch (compCheckErr) {
         console.warn('[Firestore] Verificación de empresas omitida:', compCheckErr);
+      }
+
+      // Ensure assets have official updated costs and newly cataloged models exist in Firestore
+      try {
+        const assetsSnap = await getDocs(collection(firestoreDb, COLLECTIONS.ASSETS));
+        const assetBatch = writeBatch(firestoreDb);
+        let hasAssetUpdates = false;
+        const existingAssetIds = new Set(assetsSnap.docs.map(d => d.id));
+
+        INITIAL_ASSETS.forEach(item => {
+          if (!existingAssetIds.has(item.id)) {
+            assetBatch.set(doc(firestoreDb, COLLECTIONS.ASSETS, item.id), sanitizeForFirestore(item), { merge: true });
+            hasAssetUpdates = true;
+          }
+        });
+
+        assetsSnap.docs.forEach(docSnap => {
+          const assetData = docSnap.data() as HardwareAsset;
+          const officialCost = getExpectedOfficialCost(assetData);
+          if (officialCost !== null && assetData.purchaseCost !== officialCost) {
+            assetBatch.update(docSnap.ref, { purchaseCost: officialCost });
+            hasAssetUpdates = true;
+          }
+        });
+
+        if (hasAssetUpdates) {
+          console.log('[Firestore] Sincronizando tarifas y costos oficiales de hardware en Firestore...');
+          await assetBatch.commit();
+          console.log('[Firestore] Tarifas y costos de hardware actualizados exitosamente en Firestore.');
+        }
+      } catch (assetSyncErr) {
+        console.warn('[Firestore] Verificación de costos de activos omitida:', assetSyncErr);
       }
 
       return;
@@ -294,3 +327,41 @@ export async function deleteDocumentFromFirestore(
     return { success: false, error: err?.message || String(err) };
   }
 }
+
+/**
+ * Synchronizes hardware assets in Firestore with official pricing rules.
+ */
+export async function syncOfficialHardwareCostsInFirestore(): Promise<{ updatedCount: number; addedCount: number }> {
+  try {
+    const assetsSnap = await getDocs(collection(firestoreDb, COLLECTIONS.ASSETS));
+    const assetBatch = writeBatch(firestoreDb);
+    let updatedCount = 0;
+    let addedCount = 0;
+    const existingAssetIds = new Set(assetsSnap.docs.map(d => d.id));
+
+    INITIAL_ASSETS.forEach(item => {
+      if (!existingAssetIds.has(item.id)) {
+        assetBatch.set(doc(firestoreDb, COLLECTIONS.ASSETS, item.id), sanitizeForFirestore(item), { merge: true });
+        addedCount++;
+      }
+    });
+
+    assetsSnap.docs.forEach(docSnap => {
+      const assetData = docSnap.data() as HardwareAsset;
+      const officialCost = getExpectedOfficialCost(assetData);
+      if (officialCost !== null && assetData.purchaseCost !== officialCost) {
+        assetBatch.update(docSnap.ref, { purchaseCost: officialCost });
+        updatedCount++;
+      }
+    });
+
+    if (updatedCount > 0 || addedCount > 0) {
+      await assetBatch.commit();
+    }
+    return { updatedCount, addedCount };
+  } catch (error) {
+    console.error('[Firestore] Error sincronizando costos oficiales:', error);
+    return { updatedCount: 0, addedCount: 0 };
+  }
+}
+

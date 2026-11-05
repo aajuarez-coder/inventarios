@@ -18,6 +18,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { getOfficialCost } from '../utils/hardwareCosts';
 
 interface HardwareExtractionModalProps {
   onClose: () => void;
@@ -235,7 +236,7 @@ fi
       branchId: assignedBranchId,
       locationDetails: 'Almacén Central TI (Alta Automática por Script)',
       purchaseDate: new Date().toISOString().split('T')[0],
-      purchaseCost: 22000,
+      purchaseCost: getOfficialCost(parsedData.category || 'laptop', brand, model) ?? 15750,
       currency: 'MXN',
       supplier: brand === 'Apple' ? 'Apple Store Corporativo' : 'Proveedor de TI',
       invoiceNumber: `AUTOSCRIPT-${Math.floor(10000 + Math.random() * 90000)}`,

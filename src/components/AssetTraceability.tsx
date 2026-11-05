@@ -540,8 +540,14 @@ export const AssetTraceability: React.FC<AssetTraceabilityProps> = ({
         );
 
         // Prepare email data for Responsiva Actualizada
+        const chargerInfoText = (asset.chargerSerial || asset.chargerInfo?.serialNumber)
+          ? `\n• Cargador Original Serie: ${asset.chargerSerial || asset.chargerInfo?.serialNumber} (${asset.chargerBrand || asset.chargerInfo?.brand || ''} ${asset.chargerModel || asset.chargerInfo?.model || ''})`
+          : '';
+        const screenText = asset.specs?.screenSize
+          ? `, Pantalla: ${asset.specs.screenSize}`
+          : '';
         const subject = `[Petroil TI] Carta Responsiva Actualizada - Folio ${newAsg.folioResponsiva} (${asset.assetTag})`;
-        const body = `Estimado(a) ${emp?.fullName || 'Colaborador(a)'},\n\nLe notificamos formalmente la reasignación del siguiente equipo informático bajo su custodia y resguardo laboral:\n\n• Folio de Carta Responsiva: ${newAsg.folioResponsiva}\n• Equipo: ${asset.brand} ${asset.model}\n• Placa / Asset Tag: ${asset.assetTag}\n• Número de Serie (S/N): ${asset.serialNumber}\n• Procesador / RAM / Disco: ${asset.specs?.cpu || ''}, ${asset.specs?.ram || ''}, ${asset.specs?.storage || ''}\n• Sucursal / Planta: ${currentBranch?.name || 'Sede Petroil'}\n• Accesorios Incluidos: ${(asset.accessoriesIncluded || ['Cargador original']).join(', ')}\n\nFavor de verificar las condiciones físicas y operativas del equipo e ingresar al sistema para firmar digitalmente su Carta Responsiva.\n\nAtentamente,\n${currentUser.name}\nTecnologías de la Información • Grupo Petroil`;
+        const body = `Estimado(a) ${emp?.fullName || 'Colaborador(a)'},\n\nLe notificamos formalmente la reasignación del siguiente activo informático bajo su custodia y resguardo laboral:\n\n• Folio de Carta Responsiva: ${newAsg.folioResponsiva}\n• Equipo: ${asset.brand} ${asset.model}\n• Placa / Asset Tag: ${asset.assetTag}\n• Número de Serie (S/N): ${asset.serialNumber}\n• Procesador / RAM / Disco: ${asset.specs?.cpu || ''}, ${asset.specs?.ram || ''}, ${asset.specs?.storage || ''}${screenText}${chargerInfoText}\n• Sucursal / Planta: ${currentBranch?.name || 'Sede Petroil'}\n• Accesorios Incluidos: ${(asset.accessoriesIncluded || ['Cargador original']).join(', ')}\n\nFavor de verificar las condiciones físicas y operativas del equipo e ingresar al sistema para firmar digitalmente su Carta Responsiva.\n\nAtentamente,\n${currentUser.name}\nTecnologías de la Información • Grupo Petroil`;
 
         setActionFeedback({
           type: 'usuario',
@@ -647,11 +653,18 @@ export const AssetTraceability: React.FC<AssetTraceabilityProps> = ({
     const emp = asg ? employees.find(e => e.id === asg.employeeId) : employees.find(e => e.id === asset.assignedToEmployeeId);
     const folio = asg ? asg.folioResponsiva : (item.metadata?.folioResponsiva || 'Actualización TI');
 
+    const chargerInfo = (asset.chargerSerial || asset.chargerInfo?.serialNumber)
+      ? `\n• Cargador Original Serie: ${asset.chargerSerial || asset.chargerInfo?.serialNumber} (${asset.chargerBrand || asset.chargerInfo?.brand || ''} ${asset.chargerModel || asset.chargerInfo?.model || ''})`
+      : '';
+    const screenInfo = asset.specs?.screenSize
+      ? `, Pantalla: ${asset.specs.screenSize}`
+      : '';
+
     setEmailModalState({
       isOpen: true,
       defaultTo: emp?.email || '',
       defaultSubject: `[Petroil TI] Carta Responsiva Actualizada - Folio ${folio} (${asset.assetTag})`,
-      defaultBody: `Estimado(a) ${emp?.fullName || 'Colaborador(a)'},\n\nLe enviamos los datos actualizados de la Carta Responsiva del equipo [${asset.assetTag}] ${asset.brand} ${asset.model} bajo su resguardo:\n\n• Folio de Responsiva: ${folio}\n• Placa / Asset Tag: ${asset.assetTag}\n• Serie (S/N): ${asset.serialNumber}\n• Especificaciones: ${asset.specs?.cpu || ''}, ${asset.specs?.ram || ''}, ${asset.specs?.storage || ''}\n• Ubicación / Planta: ${currentBranch?.name || 'Sede Petroil'}\n\nFavor de validar su acuse de recibo y mantener las condiciones óptimas de resguardo.\n\nAtentamente,\n${currentUser.name}\nTecnologías de la Información • Grupo Petroil`
+      defaultBody: `Estimado(a) ${emp?.fullName || 'Colaborador(a)'},\n\nLe enviamos los datos actualizados de la Carta Responsiva del equipo [${asset.assetTag}] ${asset.brand} ${asset.model} bajo su resguardo:\n\n• Folio de Responsiva: ${folio}\n• Placa / Asset Tag: ${asset.assetTag}\n• Serie (S/N): ${asset.serialNumber}\n• Especificaciones: ${asset.specs?.cpu || ''}, ${asset.specs?.ram || ''}, ${asset.specs?.storage || ''}${screenInfo}${chargerInfo}\n• Ubicación / Planta: ${currentBranch?.name || 'Sede Petroil'}\n\nFavor de validar su acuse de recibo y mantener las condiciones óptimas de resguardo.\n\nAtentamente,\n${currentUser.name}\nTecnologías de la Información • Grupo Petroil`
     });
   };
 

@@ -28,26 +28,34 @@ export interface GmailMessageSummary {
 }
 
 /**
- * Encodes a string into standard Base64URL without padding, supporting UTF-8 characters.
+ * Encodes a string into standard Base64 using UTF-8 byte stream.
  */
-function toBase64Url(str: string): string {
+export function utf8ToBase64(str: string): string {
   const utf8Bytes = new TextEncoder().encode(str);
   let binary = '';
   for (let i = 0; i < utf8Bytes.length; i++) {
     binary += String.fromCharCode(utf8Bytes[i]);
   }
-  const base64 = btoa(binary);
+  return btoa(binary);
+}
+
+/**
+ * Encodes a string into standard Base64URL without padding for Gmail API raw message payload.
+ */
+export function toBase64Url(str: string): string {
+  const base64 = utf8ToBase64(str);
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /**
- * Builds an RFC 2822 compliant MIME email string.
+ * Builds an RFC 2822 compliant MIME email string with UTF-8 Base64 content transfer encoding.
+ * This guarantees Spanish accents, ñ, ¿ and HTML formatting are never corrupted or rejected by Gmail API.
  */
-function buildMimeMessage({ to, cc, bcc, subject, htmlBody, plainText }: SendEmailPayload): string {
+export function buildMimeMessage({ to, cc, bcc, subject, htmlBody, plainText }: SendEmailPayload): string {
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substring(2)}`;
   
-  // Encode subject in UTF-8 base64 header format
-  const encodedSubject = `=?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`;
+  // Encode subject in standard RFC 2047 UTF-8 Base64 format
+  const encodedSubject = `=?UTF-8?B?${utf8ToBase64(subject)}?=`;
 
   const headers: string[] = [
     `To: ${to}`,
@@ -58,20 +66,27 @@ function buildMimeMessage({ to, cc, bcc, subject, htmlBody, plainText }: SendEma
     `Content-Type: multipart/alternative; boundary="${boundary}"`
   ].filter((h): h is string => Boolean(h));
 
-  const textPart = plainText || htmlBody.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const textPart = plainText || htmlBody.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                                      .replace(/<[^>]+>/g, ' ')
+                                      .replace(/\s+/g, ' ')
+                                      .trim();
+
+  // Encode both body alternatives in UTF-8 Base64 to strictly adhere to MIME specifications
+  const base64Text = utf8ToBase64(textPart);
+  const base64Html = utf8ToBase64(htmlBody);
 
   const bodyParts = [
     `--${boundary}`,
     'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: 7bit',
+    'Content-Transfer-Encoding: base64',
     '',
-    textPart,
+    base64Text,
     '',
     `--${boundary}`,
     'Content-Type: text/html; charset=UTF-8',
-    'Content-Transfer-Encoding: 7bit',
+    'Content-Transfer-Encoding: base64',
     '',
-    htmlBody,
+    base64Html,
     '',
     `--${boundary}--`
   ];
@@ -228,10 +243,28 @@ export const EmailTemplates = {
     accessories: string[];
     itStaffName: string;
     companyName?: string;
+    branchName?: string;
+    specs?: {
+      cpu?: string;
+      ram?: string;
+      storage?: string;
+      os?: string;
+      screenSize?: string;
+    };
+    charger?: {
+      serial?: string;
+      brand?: string;
+      model?: string;
+    };
+    notes?: string;
+    isSigned?: boolean;
   }) => {
     const accessoriesList = params.accessories.length > 0 
       ? params.accessories.map(acc => `<li style="margin-bottom: 4px;">${acc}</li>`).join('') 
       : '<li>Sin accesorios adicionales especificados</li>';
+
+    const hasCharger = Boolean(params.charger?.serial || params.charger?.brand || params.charger?.model);
+    const hasSpecs = Boolean(params.specs?.cpu || params.specs?.ram || params.specs?.storage || params.specs?.screenSize);
 
     return `
       <!DOCTYPE html>
@@ -241,16 +274,20 @@ export const EmailTemplates = {
         <title>Carta Responsiva de Equipo de Cómputo</title>
       </head>
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b;">
-        <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #cbd5e1; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+        <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 640px; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #cbd5e1; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
           <!-- Header -->
           <tr>
-            <td style="background-color: #0f172a; padding: 24px 32px; border-bottom: 4px solid #dc2626;">
+            <td style="background-color: #0f172a; padding: 26px 32px; border-bottom: 4px solid #dc2626;">
               <table width="100%">
                 <tr>
                   <td>
-                    <span style="display: inline-block; background-color: #dc2626; color: #ffffff; font-size: 11px; font-weight: bold; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Petroil TI</span>
-                    <h1 style="color: #ffffff; margin: 8px 0 0 0; font-size: 18px; font-weight: 700;">Notificación de Asignación de Equipo</h1>
-                    <p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 13px;">Folio Oficial: <strong>${params.folio}</strong></p>
+                    <span style="display: inline-block; background-color: #dc2626; color: #ffffff; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">PETROIL TI • CARTA RESPONSIVA</span>
+                    <h1 style="color: #ffffff; margin: 8px 0 0 0; font-size: 19px; font-weight: 700;">Notificación de Asignación y Entrega de Equipo</h1>
+                    <p style="color: #94a3b8; margin: 5px 0 0 0; font-size: 13px;">
+                      Folio Oficial: <strong style="color: #38bdf8; font-family: monospace;">${params.folio}</strong>
+                      ${params.companyName ? ` • Empresa: <strong>${params.companyName}</strong>` : ''}
+                      ${params.branchName ? ` • Sede: <strong>${params.branchName}</strong>` : ''}
+                    </p>
                   </td>
                 </tr>
               </table>
@@ -260,60 +297,109 @@ export const EmailTemplates = {
           <!-- Content -->
           <tr>
             <td style="padding: 28px 32px;">
-              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.5;">Estimado(a) <strong>${params.employeeName}</strong>,</p>
+              <p style="margin: 0 0 14px 0; font-size: 14px; line-height: 1.5;">Estimado(a) <strong>${params.employeeName}</strong>,</p>
               <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.5; color: #334155;">
-                Por medio del presente correo institucional, el Departamento de Tecnologías de la Información le notifica la entrega formal en resguardo del siguiente activo informático:
+                Por medio del presente correo institucional, el Departamento de Tecnologías de la Información le notifica la entrega formal en resguardo del siguiente activo informático y sus accesorios asociados:
               </p>
 
               <!-- Device Card -->
-              <table width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 24px; border-collapse: separate;">
+              <table width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 20px; border-collapse: separate;">
                 <tr>
-                  <td style="padding: 16px;">
+                  <td style="padding: 18px;">
                     <table width="100%" style="font-size: 13px; color: #334155;">
                       <tr>
-                        <td style="padding: 4px 0; color: #64748b; width: 140px;">Placa / Asset Tag:</td>
-                        <td style="padding: 4px 0; font-weight: bold; color: #0f172a;">${params.assetTag}</td>
+                        <td style="padding: 5px 0; color: #64748b; width: 150px;">Placa / Asset Tag:</td>
+                        <td style="padding: 5px 0; font-weight: bold; color: #0284c7; font-family: monospace; font-size: 14px;">${params.assetTag}</td>
                       </tr>
                       <tr>
-                        <td style="padding: 4px 0; color: #64748b;">Equipo:</td>
-                        <td style="padding: 4px 0; font-weight: 600;">${params.assetBrandModel}</td>
+                        <td style="padding: 5px 0; color: #64748b;">Equipo y Modelo:</td>
+                        <td style="padding: 5px 0; font-weight: 700; color: #0f172a;">${params.assetBrandModel}</td>
                       </tr>
                       <tr>
-                        <td style="padding: 4px 0; color: #64748b;">Número de Serie:</td>
-                        <td style="padding: 4px 0; font-family: monospace;">${params.serialNumber}</td>
+                        <td style="padding: 5px 0; color: #64748b;">Número de Serie (S/N):</td>
+                        <td style="padding: 5px 0; font-family: monospace; color: #334155;">${params.serialNumber}</td>
                       </tr>
                       <tr>
-                        <td style="padding: 4px 0; color: #64748b;">Categoría:</td>
-                        <td style="padding: 4px 0; text-transform: capitalize;">${params.category}</td>
+                        <td style="padding: 5px 0; color: #64748b;">Categoría:</td>
+                        <td style="padding: 5px 0; text-transform: capitalize;">${params.category}</td>
                       </tr>
                       <tr>
-                        <td style="padding: 4px 0; color: #64748b;">Fecha Asignación:</td>
-                        <td style="padding: 4px 0;">${params.assignedDate}</td>
+                        <td style="padding: 5px 0; color: #64748b;">Estado Físico:</td>
+                        <td style="padding: 5px 0; text-transform: capitalize; color: #166534; font-weight: 600;">${params.condition || 'Excelente'}</td>
                       </tr>
                       <tr>
-                        <td style="padding: 4px 0; color: #64748b;">Entregado por:</td>
-                        <td style="padding: 4px 0;">${params.itStaffName} (TI)</td>
+                        <td style="padding: 5px 0; color: #64748b;">Fecha Asignación:</td>
+                        <td style="padding: 5px 0;">${params.assignedDate}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; color: #64748b;">Entregado por:</td>
+                        <td style="padding: 5px 0;">${params.itStaffName} (TI)</td>
                       </tr>
                     </table>
                   </td>
                 </tr>
               </table>
 
+              <!-- Technical Specifications (if present) -->
+              ${hasSpecs ? `
+              <div style="margin-bottom: 20px; background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px 18px;">
+                <h4 style="margin: 0 0 10px 0; font-size: 12px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">⚙️ Especificaciones Técnicas:</h4>
+                <table width="100%" style="font-size: 12px; color: #334155;">
+                  <tr>
+                    ${params.specs?.cpu ? `<td style="padding: 3px 0;"><strong>CPU:</strong> ${params.specs.cpu}</td>` : ''}
+                    ${params.specs?.ram ? `<td style="padding: 3px 0;"><strong>RAM:</strong> ${params.specs.ram}</td>` : ''}
+                  </tr>
+                  <tr>
+                    ${params.specs?.storage ? `<td style="padding: 3px 0;"><strong>Almacenamiento:</strong> ${params.specs.storage}</td>` : ''}
+                    ${params.specs?.screenSize ? `<td style="padding: 3px 0;"><strong>Pantalla:</strong> ${params.specs.screenSize}</td>` : ''}
+                  </tr>
+                  ${params.specs?.os ? `<tr><td colspan="2" style="padding: 3px 0;"><strong>Sistema Operativo:</strong> ${params.specs.os}</td></tr>` : ''}
+                </table>
+              </div>
+              ` : ''}
+
+              <!-- Charger Details (if registered) -->
+              ${hasCharger ? `
+              <div style="margin-bottom: 20px; background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 14px 18px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 12px; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Cargador de Corriente Entregado:</h4>
+                <table width="100%" style="font-size: 12px; color: #78350f;">
+                  <tr>
+                    <td style="padding: 2px 0; width: 140px;"><strong>Serie Cargador (S/N):</strong></td>
+                    <td style="padding: 2px 0; font-family: monospace;">${params.charger?.serial || 'Original de fábrica'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 2px 0;"><strong>Marca / Fabricante:</strong></td>
+                    <td style="padding: 2px 0;">${params.charger?.brand || params.assetBrandModel.split(' ')[0]}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 2px 0;"><strong>Modelo / Potencia:</strong></td>
+                    <td style="padding: 2px 0;">${params.charger?.model || 'Estándar'}</td>
+                  </tr>
+                </table>
+              </div>
+              ` : ''}
+
               <!-- Accessories -->
-              <div style="margin-bottom: 24px;">
-                <h4 style="margin: 0 0 8px 0; font-size: 13px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">Accesorios entregados:</h4>
+              <div style="margin-bottom: 20px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 12px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">Accesorios y periféricos entregados:</h4>
                 <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #475569;">
                   ${accessoriesList}
                 </ul>
               </div>
 
+              ${params.notes ? `
+              <div style="margin-bottom: 20px; padding: 10px 14px; background-color: #f8fafc; border-left: 3px solid #64748b; font-size: 12px; color: #475569;">
+                <strong>Observaciones de entrega:</strong> ${params.notes}
+              </div>
+              ` : ''}
+
               <!-- Obligations Notice -->
               <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 16px; border-radius: 4px; font-size: 12px; color: #991b1b; line-height: 1.5; margin-bottom: 24px;">
-                <strong>Aviso de Custodia Responsable:</strong> El colaborador asume la custodia del bien patrimonial para el estricto desempeño de sus funciones laborales. En caso de siniestro, robo o falla técnica, repórtelo de inmediato a la Mesa de Ayuda TI.
+                <strong>Aviso de Custodia Responsable:</strong> El colaborador asume la custodia legal del bien patrimonial para el estricto desempeño de sus funciones laborales en Grupo Petroil. En caso de siniestro, robo o falla técnica, repórtelo de inmediato a la Mesa de Ayuda TI.
               </div>
 
               <p style="margin: 0; font-size: 13px; color: #64748b; line-height: 1.5;">
-                Conserve este comprobante como acuse digital de recibo. Puede consultar la carta responsiva firmada en el portal corporativo ITAM.
+                Conserve este comprobante como acuse digital de recibo. Puede consultar y validar la carta responsiva firmada en el portal corporativo ITAM.
               </p>
             </td>
           </tr>
@@ -321,7 +407,7 @@ export const EmailTemplates = {
           <!-- Footer -->
           <tr>
             <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 32px; text-align: center; font-size: 11px; color: #64748b;">
-              <p style="margin: 0 0 4px 0;"><strong>Departamento de Tecnologías de la Información</strong> • Petroil Corporativo</p>
+              <p style="margin: 0 0 4px 0;"><strong>Departamento de Tecnologías de la Información</strong> • Grupo Petroil</p>
               <p style="margin: 0;">Mesa de Ayuda TI • Mazatlán, Sinaloa, México</p>
             </td>
           </tr>

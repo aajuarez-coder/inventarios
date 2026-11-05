@@ -102,6 +102,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
   const [pdfMessage, setPdfMessage] = useState<string | null>(null);
   const [csvMessage, setCsvMessage] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [limitToTen, setLimitToTen] = useState<boolean>(true);
 
   // Asset Deletion state (for decommissioned / 'baja' & obsolete / 'obsoleto' assets)
   const [assetToDelete, setAssetToDelete] = useState<HardwareAsset | null>(null);
@@ -121,7 +122,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
   };
 
   const handleExportCsv = () => {
-    const result = exportHardwareInventoryCsv(filteredAssets, branches, employees);
+    const result = exportHardwareInventoryCsv(sortedAndFilteredAssets, branches, employees);
     setCsvMessage(`Se exportaron ${result.count} equipos de hardware en formato CSV exitosamente.`);
     setTimeout(() => setCsvMessage(null), 4500);
   };
@@ -236,22 +237,42 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
 
   const query = (externalSearch || search).toLowerCase();
 
-  const filteredAssets = assets.filter(asset => {
-    const matchesSearch = 
-      asset.assetTag.toLowerCase().includes(query) ||
-      asset.serialNumber.toLowerCase().includes(query) ||
-      asset.name.toLowerCase().includes(query) ||
-      asset.brand.toLowerCase().includes(query) ||
-      asset.model.toLowerCase().includes(query) ||
-      (asset.specs.cpu && asset.specs.cpu.toLowerCase().includes(query));
+  // Filter and sort assets by purchaseDate / entry date descending (más reciente primero)
+  const sortedAndFilteredAssets = useMemo(() => {
+    return assets
+      .filter(asset => {
+        const matchesSearch = 
+          asset.assetTag.toLowerCase().includes(query) ||
+          asset.serialNumber.toLowerCase().includes(query) ||
+          asset.name.toLowerCase().includes(query) ||
+          asset.brand.toLowerCase().includes(query) ||
+          asset.model.toLowerCase().includes(query) ||
+          (asset.specs.cpu && asset.specs.cpu.toLowerCase().includes(query));
 
-    const matchesCategory = selectedCategory === 'all' || asset.category === selectedCategory;
-    const matchesStatus = selectedStatus === 'all' || asset.status === selectedStatus;
-    const matchesBranch = selectedBranch === 'all' || asset.branchId === selectedBranch;
-    const matchesObsolete = !filterObsoleteOnly || (asset.status === 'baja' || asset.physicalCondition === 'obsoleto');
+        const matchesCategory = selectedCategory === 'all' || asset.category === selectedCategory;
+        const matchesStatus = selectedStatus === 'all' || asset.status === selectedStatus;
+        const matchesBranch = selectedBranch === 'all' || asset.branchId === selectedBranch;
+        const matchesObsolete = !filterObsoleteOnly || (asset.status === 'baja' || asset.physicalCondition === 'obsoleto');
 
-    return matchesSearch && matchesCategory && matchesStatus && matchesBranch && matchesObsolete;
-  });
+        return matchesSearch && matchesCategory && matchesStatus && matchesBranch && matchesObsolete;
+      })
+      .sort((a, b) => {
+        const timeA = a.purchaseDate ? new Date(a.purchaseDate).getTime() : 0;
+        const timeB = b.purchaseDate ? new Date(b.purchaseDate).getTime() : 0;
+        return timeB - timeA;
+      });
+  }, [assets, query, selectedCategory, selectedStatus, selectedBranch, filterObsoleteOnly]);
+
+  // Display only the last 10 by default for optimal visualization and fluidity
+  const displayedAssets = useMemo(() => {
+    if (limitToTen) {
+      return sortedAndFilteredAssets.slice(0, 10);
+    }
+    return sortedAndFilteredAssets;
+  }, [sortedAndFilteredAssets, limitToTen]);
+
+  // Alias for backward compatibility across the component
+  const filteredAssets = displayedAssets;
 
   const handleToggleSelectAsset = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -509,7 +530,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
     setTimeout(() => {
       try {
         const branchObj = selectedBranch !== 'all' ? branches.find(b => b.id === selectedBranch) : undefined;
-        generateInstitutionalInventoryPdf(filteredAssets, employees, branches, {
+        generateInstitutionalInventoryPdf(sortedAndFilteredAssets, employees, branches, {
           generatedBy: currentUser.name,
           branchFilterName: branchObj ? `${branchObj.name} (${branchObj.city})` : 'Consolidado Corporativo (Todas las Sedes)',
           openPrintDialog: withPrint
@@ -981,24 +1002,61 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
         </div>
       )}
 
-      {/* Assets Count indicator */}
-      <div className="flex flex-wrap items-center justify-between text-xs text-slate-700 font-medium px-1 gap-2">
-        <div>
-          {selectedCategory === 'all' ? (
-            <span>
-              Mostrando <strong className="text-slate-900">{filteredAssets.length}</strong> de <strong className="text-slate-900">{assets.length}</strong> equipos registrados
-            </span>
-          ) : (
-            <span>
-              Mostrando <strong className="text-slate-900">{filteredAssets.length}</strong> de un total de <strong className="text-[#004a99] font-bold">{categoryCounts[selectedCategory] || 0}</strong> {categoryLabels[selectedCategory] || selectedCategory} <span className="text-slate-500">(Total inventario general: {assets.length})</span>
+      {/* Assets Count & Fluidity Optimization Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-700 font-medium px-2 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 hover:text-[#004a99]">
+            <input
+              type="checkbox"
+              checked={allFilteredSelected}
+              ref={el => {
+                if (el) el.indeterminate = someFilteredSelected;
+              }}
+              onChange={handleToggleSelectAll}
+              className="w-4 h-4 rounded border-slate-300 text-[#ff8200] focus:ring-[#ff8200] cursor-pointer"
+            />
+            <span>Seleccionar ({displayedAssets.length})</span>
+          </label>
+
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-100/70 text-sky-900 border border-sky-200 font-semibold text-[11px]">
+            <Calendar className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+            <span>Ordenados por Fecha de Entrada (Más reciente primero)</span>
+          </span>
+
+          {limitToTen && sortedAndFilteredAssets.length > 10 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-100/70 text-amber-900 border border-amber-300 font-bold text-[11px]">
+              <Zap className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span>Vista de Fluidez: Últimos 10 equipos</span>
             </span>
           )}
         </div>
-        {selectedAssetIds.size > 0 && (
-          <span className="text-[#004a99] font-bold">
-            {selectedAssetIds.size} seleccionados
+
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          <span className="text-[11.5px] text-slate-600 font-medium">
+            Mostrando <strong className="text-slate-900 font-bold">{displayedAssets.length}</strong> de <strong className="text-slate-900 font-bold">{sortedAndFilteredAssets.length}</strong> {assets.length !== sortedAndFilteredAssets.length ? `(filtrados de ${assets.length})` : 'equipos'}
           </span>
-        )}
+
+          {sortedAndFilteredAssets.length > 10 && (
+            <button
+              type="button"
+              onClick={() => setLimitToTen(!limitToTen)}
+              className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+              title={limitToTen ? 'Ver inventario completo sin limitar a 10' : 'Volver a limitar a los 10 más recientes'}
+            >
+              {limitToTen ? (
+                <>
+                  <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Ver todo ({sortedAndFilteredAssets.length})</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Mostrar solo 10 últimos</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Render Table or Grid */}
@@ -1066,7 +1124,14 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                         <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             {getCategoryIcon(asset.category)}
-                            <span className="text-[#004a99] font-black">{asset.assetTag}</span>
+                            <div>
+                              <span className="text-[#004a99] font-black">{asset.assetTag}</span>
+                              {asset.purchaseDate && (
+                                <span className="block text-[10.5px] text-slate-500 font-sans font-medium">
+                                  Entrada: <strong className="text-slate-700">{formatDate(asset.purchaseDate)}</strong>
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
 
@@ -1272,6 +1337,11 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                     <p className="truncate"><strong className="text-slate-900">CPU:</strong> {asset.specs.cpu || 'N/A'}</p>
                     <p><strong className="text-slate-900">RAM / Disco:</strong> {asset.specs.ram} • {asset.specs.storage}</p>
                     <p className="truncate"><strong className="text-slate-900">Ubicación:</strong> {br?.name}</p>
+                    {asset.purchaseDate && (
+                      <p className="text-slate-600 font-medium pt-1 border-t border-slate-200/60">
+                        <strong className="text-slate-900">Entrada / Alta:</strong> {formatDate(asset.purchaseDate)}
+                      </p>
+                    )}
                   </div>
 
                   <div className="mt-3 flex items-center justify-between text-[11.5px]">

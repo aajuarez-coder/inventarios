@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useInventory } from '../context/InventoryContext';
 import { Employee, HardwareAsset, PhysicalCondition } from '../types/inventory';
 import { 
@@ -24,7 +24,10 @@ import {
   Layers,
   Download,
   AlertCircle,
-  Tag
+  Tag,
+  Calendar,
+  Zap,
+  Eye
 } from 'lucide-react';
 import { formatDate } from '../utils/formatters';
 import { exportEmployeesCsv } from '../utils/exportCsv';
@@ -119,18 +122,40 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
 
   const departments = Array.from(new Set(employees.map(e => e.department)));
 
-  const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = 
-      emp.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      emp.employeeNumber.toLowerCase().includes(search.toLowerCase()) ||
-      emp.email.toLowerCase().includes(search.toLowerCase()) ||
-      emp.position.toLowerCase().includes(search.toLowerCase());
+  const [limitToTen, setLimitToTen] = useState<boolean>(true);
 
-    const matchesDept = selectedDept === 'all' || emp.department === selectedDept;
-    const matchesCompany = selectedCompany === 'all' || emp.companyId === selectedCompany;
-    const matchesBranch = selectedBranch === 'all' || emp.branchId === selectedBranch;
-    return matchesSearch && matchesDept && matchesCompany && matchesBranch;
-  });
+  // Filter and sort employees by fecha de entrada (hireDate) descending (más reciente primero)
+  const sortedAndFilteredEmployees = useMemo(() => {
+    return employees
+      .filter(emp => {
+        const matchesSearch = 
+          emp.fullName.toLowerCase().includes(search.toLowerCase()) ||
+          emp.employeeNumber.toLowerCase().includes(search.toLowerCase()) ||
+          emp.email.toLowerCase().includes(search.toLowerCase()) ||
+          emp.position.toLowerCase().includes(search.toLowerCase());
+
+        const matchesDept = selectedDept === 'all' || emp.department === selectedDept;
+        const matchesCompany = selectedCompany === 'all' || emp.companyId === selectedCompany;
+        const matchesBranch = selectedBranch === 'all' || emp.branchId === selectedBranch;
+        return matchesSearch && matchesDept && matchesCompany && matchesBranch;
+      })
+      .sort((a, b) => {
+        const timeA = a.hireDate ? new Date(a.hireDate).getTime() : 0;
+        const timeB = b.hireDate ? new Date(b.hireDate).getTime() : 0;
+        return timeB - timeA;
+      });
+  }, [employees, search, selectedDept, selectedCompany, selectedBranch]);
+
+  // Display only the last 10 by default to optimize rendering and fluidity
+  const displayedEmployees = useMemo(() => {
+    if (limitToTen) {
+      return sortedAndFilteredEmployees.slice(0, 10);
+    }
+    return sortedAndFilteredEmployees;
+  }, [sortedAndFilteredEmployees, limitToTen]);
+
+  // Alias for backward compatibility in components
+  const filteredEmployees = displayedEmployees;
 
   const handleToggleSelectEmployee = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -142,20 +167,20 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
     });
   };
 
-  const allFilteredSelected = filteredEmployees.length > 0 && filteredEmployees.every(e => selectedEmployeeIds.has(e.id));
-  const someFilteredSelected = filteredEmployees.some(e => selectedEmployeeIds.has(e.id)) && !allFilteredSelected;
+  const allFilteredSelected = displayedEmployees.length > 0 && displayedEmployees.every(e => selectedEmployeeIds.has(e.id));
+  const someFilteredSelected = displayedEmployees.some(e => selectedEmployeeIds.has(e.id)) && !allFilteredSelected;
 
   const handleToggleSelectAll = () => {
     if (allFilteredSelected) {
       setSelectedEmployeeIds(prev => {
         const next = new Set(prev);
-        filteredEmployees.forEach(e => next.delete(e.id));
+        displayedEmployees.forEach(e => next.delete(e.id));
         return next;
       });
     } else {
       setSelectedEmployeeIds(prev => {
         const next = new Set(prev);
-        filteredEmployees.forEach(e => next.add(e.id));
+        displayedEmployees.forEach(e => next.add(e.id));
         return next;
       });
     }
@@ -329,7 +354,7 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
   };
 
   const handleExportCsv = () => {
-    const result = exportEmployeesCsv(filteredEmployees, assets, branches, companies);
+    const result = exportEmployeesCsv(sortedAndFilteredEmployees, assets, branches, companies);
     setEmployeeActionFeedback({
       type: 'success',
       message: `Directorio de colaboradores exportado exitosamente en formato CSV (${result.count} registros).`
@@ -665,23 +690,61 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
         </div>
       )}
 
-      {/* Select All / Count indicator */}
-      <div className="flex items-center justify-between text-xs text-slate-700 font-medium px-1">
-        <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 hover:text-[#004a99]">
-          <input
-            type="checkbox"
-            checked={allFilteredSelected}
-            ref={el => {
-              if (el) el.indeterminate = someFilteredSelected;
-            }}
-            onChange={handleToggleSelectAll}
-            className="w-4 h-4 rounded border-slate-300 text-[#ff8200] focus:ring-[#ff8200] cursor-pointer"
-          />
-          <span>Seleccionar todos los mostrados ({filteredEmployees.length})</span>
-        </label>
-        <span>
-          Mostrando <strong className="text-slate-900">{filteredEmployees.length}</strong> de <strong className="text-slate-900">{employees.length}</strong> colaboradores
-        </span>
+      {/* Select All / Count & Fluidity Optimization indicator */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-700 font-medium px-2 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 hover:text-[#004a99]">
+            <input
+              type="checkbox"
+              checked={allFilteredSelected}
+              ref={el => {
+                if (el) el.indeterminate = someFilteredSelected;
+              }}
+              onChange={handleToggleSelectAll}
+              className="w-4 h-4 rounded border-slate-300 text-[#ff8200] focus:ring-[#ff8200] cursor-pointer"
+            />
+            <span>Seleccionar ({displayedEmployees.length})</span>
+          </label>
+
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-100/70 text-sky-900 border border-sky-200 font-semibold text-[11px]">
+            <Calendar className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+            <span>Ordenados por Fecha de Entrada (Más reciente primero)</span>
+          </span>
+
+          {limitToTen && sortedAndFilteredEmployees.length > 10 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-100/70 text-amber-900 border border-amber-300 font-bold text-[11px]">
+              <Zap className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span>Vista de Fluidez: Últimos 10 colaboradores</span>
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          <span className="text-[11.5px] text-slate-600 font-medium">
+            Mostrando <strong className="text-slate-900 font-bold">{displayedEmployees.length}</strong> de <strong className="text-slate-900 font-bold">{sortedAndFilteredEmployees.length}</strong> {employees.length !== sortedAndFilteredEmployees.length ? `(filtrados de ${employees.length})` : 'colaboradores'}
+          </span>
+
+          {sortedAndFilteredEmployees.length > 10 && (
+            <button
+              type="button"
+              onClick={() => setLimitToTen(!limitToTen)}
+              className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+              title={limitToTen ? 'Ver listado completo sin limitar a 10' : 'Volver a limitar a los 10 más recientes'}
+            >
+              {limitToTen ? (
+                <>
+                  <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Ver todos ({sortedAndFilteredEmployees.length})</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Mostrar solo 10 últimos</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Employees Grid */}
@@ -758,6 +821,12 @@ export const EmployeesDirectory: React.FC<EmployeesDirectoryProps> = ({
                     <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                     <span className="truncate font-semibold text-slate-800" title={branch?.name}>
                       {branch?.name || 'Sucursal no asignada'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="text-[11.5px] text-slate-700 font-medium">
+                      Fecha de Entrada: <strong className="text-slate-900 font-bold">{formatDate(emp.hireDate)}</strong>
                     </span>
                   </div>
                 </div>
