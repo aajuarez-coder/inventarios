@@ -43,9 +43,12 @@ import {
   Tablet,
   ExternalLink,
   Globe,
-  Zap
+  Zap,
+  DollarSign,
+  RefreshCw
 } from 'lucide-react';
 import { formatCurrency, formatDate, getWarrantyStatus, getMaintenanceStatus, getStatusBadge, getConditionLabel } from '../utils/formatters';
+import { OFFICIAL_HARDWARE_PRICES, getOfficialCost } from '../utils/hardwareCosts';
 import { AssetDetailModal } from './AssetDetailModal';
 import { AssetBarcode } from './AssetBarcode';
 import { HardwareExtractionModal } from './HardwareExtractionModal';
@@ -81,6 +84,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
     bulkUpdateAssets, 
     bulkDeleteAssets, 
     bulkRetireAssets, 
+    syncOfficialHardwareCosts,
     currentUser, 
     canEdit, 
     isViewer 
@@ -103,6 +107,24 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
   const [csvMessage, setCsvMessage] = useState<string | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [limitToTen, setLimitToTen] = useState<boolean>(true);
+  const [showTariffModal, setShowTariffModal] = useState(false);
+  const [isSyncingTariffs, setIsSyncingTariffs] = useState(false);
+  const [tariffSyncFeedback, setTariffSyncFeedback] = useState<string | null>(null);
+
+  const handleSyncOfficialTariffs = async () => {
+    setIsSyncingTariffs(true);
+    try {
+      const res = await syncOfficialHardwareCosts();
+      confetti({ particleCount: 75, spread: 65, origin: { y: 0.6 } });
+      setTariffSyncFeedback(`✓ Tarifas oficiales Petroil aplicadas con éxito: ${res.updatedCount} equipos actualizados en la base de datos.`);
+      setTimeout(() => setTariffSyncFeedback(null), 6500);
+    } catch (err: any) {
+      setTariffSyncFeedback(`Error al sincronizar tarifas: ${err.message || 'Error de conexión'}`);
+      setTimeout(() => setTariffSyncFeedback(null), 6000);
+    } finally {
+      setIsSyncingTariffs(false);
+    }
+  };
 
   // Asset Deletion state (for decommissioned / 'baja' & obsolete / 'obsoleto' assets)
   const [assetToDelete, setAssetToDelete] = useState<HardwareAsset | null>(null);
@@ -192,7 +214,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
     branchId: branches[0]?.id || 'branch-1',
     locationDetails: 'Almacén General TI',
     purchaseDate: '2026-01-15',
-    purchaseCost: 24500,
+    purchaseCost: 15750, // Tarifa oficial Laptop HP por defecto
     supplier: 'Compusoluciones SA de CV',
     invoiceNumber: `FA-2026-${Math.floor(10000 + Math.random() * 90000)}`,
     warrantyEndDate: '2029-01-15',
@@ -201,6 +223,33 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
     accessories: ['Cargador original', 'Mochila corporativa', 'Mouse inalámbrico'],
     notes: ''
   });
+
+  const handleCategoryChange = (cat: AssetCategory) => {
+    const suggested = getOfficialCost(cat, formData.brand, formData.model, formData.screenSize);
+    setFormData(prev => ({
+      ...prev,
+      category: cat,
+      purchaseCost: suggested !== null ? suggested : prev.purchaseCost
+    }));
+  };
+
+  const handleBrandChange = (brand: string) => {
+    const suggested = getOfficialCost(formData.category, brand, formData.model, formData.screenSize);
+    setFormData(prev => ({
+      ...prev,
+      brand,
+      purchaseCost: suggested !== null ? suggested : prev.purchaseCost
+    }));
+  };
+
+  const handleModelChange = (model: string) => {
+    const suggested = getOfficialCost(formData.category, formData.brand, model, formData.screenSize);
+    setFormData(prev => ({
+      ...prev,
+      model,
+      purchaseCost: suggested !== null ? suggested : prev.purchaseCost
+    }));
+  };
 
   const obsoleteOrBajaAssets = assets.filter(a => a.status === 'baja' || a.physicalCondition === 'obsoleto');
 
@@ -604,6 +653,16 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
             </button>
           </div>
 
+          {/* Official Costs & Tariffs Button */}
+          <button
+            onClick={() => setShowTariffModal(true)}
+            className="px-3.5 py-2.5 rounded-xl border border-blue-300 bg-blue-50/90 hover:bg-blue-100 text-blue-900 font-bold text-xs transition-colors flex items-center gap-2 cursor-pointer shadow-xs"
+            title="Consultar y sincronizar tarifas y costos oficiales de hardware"
+          >
+            <Tag className="w-4 h-4 text-blue-700" />
+            <span>Tarifas Oficiales</span>
+          </button>
+
           {/* Export CSV button */}
           <button
             onClick={handleExportCsv}
@@ -699,6 +758,19 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
             className="text-emerald-800 hover:text-emerald-950 font-bold ml-3 text-sm cursor-pointer"
           >
             ✕
+          </button>
+        </div>
+      )}
+
+      {/* Tariff Sync notification */}
+      {tariffSyncFeedback && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{tariffSyncFeedback}</span>
+          </div>
+          <button onClick={() => setTariffSyncFeedback(null)} className="text-emerald-700 hover:text-emerald-900 cursor-pointer">
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -1599,7 +1671,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                   <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Categoría *</label>
                   <select
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value as AssetCategory })}
+                    onChange={(e) => handleCategoryChange(e.target.value as AssetCategory)}
                     className="w-full px-3 py-2.5 border border-slate-300 rounded-xl bg-white text-sm font-medium text-slate-900 focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden cursor-pointer"
                   >
                     <option value="laptop">Laptop / Portátil</option>
@@ -1619,7 +1691,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                     required
                     placeholder="Ej. Lenovo, Dell, Apple, HP, Samsung"
                     value={formData.brand}
-                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                    onChange={(e) => handleBrandChange(e.target.value)}
                     className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
@@ -1631,7 +1703,7 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                     required
                     placeholder="Ej. ThinkPad T14, iPad Air, UltraSharp 27"
                     value={formData.model}
-                    onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                    onChange={(e) => handleModelChange(e.target.value)}
                     className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
                 </div>
@@ -1829,7 +1901,14 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block mb-1">Costo de Compra (MXN)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-slate-700 text-xs sm:text-[13px] block">Costo de Compra (MXN)</label>
+                    {OFFICIAL_HARDWARE_PRICES.some(p => p.cost === formData.purchaseCost) && (
+                      <span className="text-[10px] text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-1.5 py-0.5 rounded font-bold">
+                        Tarifa Oficial
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="number"
                     value={formData.purchaseCost}
@@ -1846,6 +1925,61 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
                     onChange={(e) => setFormData({ ...formData, warrantyEndDate: e.target.value })}
                     className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 bg-white focus:ring-2 focus:ring-[#ff8200]/20 focus:border-[#ff8200] outline-hidden caret-[#ff8200]"
                   />
+                </div>
+              </div>
+
+              {/* Presets de Tarifas Oficiales Petroil */}
+              <div className="p-3.5 bg-blue-50/70 rounded-xl border border-blue-200/90 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-950 flex items-center gap-1.5 uppercase tracking-wide">
+                    <Tag className="w-4 h-4 text-blue-600" />
+                    <span>Tarifas Oficiales Petroil (Clic para autofirmar costo y modelo)</span>
+                  </span>
+                  {OFFICIAL_HARDWARE_PRICES.some(p => p.cost === formData.purchaseCost) && (
+                    <span className="text-[10px] text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      Tarifa Oficial Aplicada
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                  {OFFICIAL_HARDWARE_PRICES.map(preset => {
+                    const isSelected = formData.purchaseCost === preset.cost && formData.category === preset.category;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({
+                            ...prev,
+                            purchaseCost: preset.cost,
+                            category: preset.category,
+                            ...(preset.brand ? { brand: preset.brand } : {}),
+                            ...(preset.id === 'price-hp-laptop' ? { brand: 'HP', model: prev.model || 'EliteBook 840' } : {}),
+                            ...(preset.id === 'price-asus-expertbook' ? { brand: 'ASUS', model: 'ExpertBook B1400' } : {}),
+                            ...(preset.id === 'price-asus-expertbook-15' ? { brand: 'ASUS', model: 'ExpertBook 15.6" B1502', screenSize: '15.6"' } : {}),
+                            ...(preset.id === 'price-lenovo-thinkpad-l' ? { brand: 'Lenovo', model: 'ThinkPad L14 Gen 4' } : {}),
+                            ...(preset.id === 'price-msi-cyborg-15' ? { brand: 'MSI', model: 'Cyborg 15 (15.6")', screenSize: '15.6"' } : {}),
+                            ...(preset.id === 'price-tablets' ? { brand: 'Samsung', model: 'Galaxy Tab Active' } : {}),
+                            ...(preset.id === 'price-monitores' ? { brand: 'Dell Technologies', model: 'UltraSharp 24"' } : {}),
+                            ...(preset.id === 'price-escritorio' ? { brand: 'Dell Technologies', model: 'OptiPlex Micro' } : {}),
+                            ...(preset.id === 'price-servidores' ? { brand: 'Dell Technologies', model: 'PowerEdge R650xs' } : {}),
+                            ...(preset.screenSize ? { screenSize: preset.screenSize } : {})
+                          }));
+                        }}
+                        className={`p-2 rounded-lg text-left text-xs transition-all border cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-300'
+                            : 'bg-white hover:bg-blue-100/70 text-slate-800 border-slate-200 shadow-2xs'
+                        }`}
+                      >
+                        <div className="font-bold text-[11px] truncate">{preset.label}</div>
+                        <div className={`font-mono text-xs font-bold mt-0.5 ${isSelected ? 'text-blue-100' : 'text-blue-700'}`}>
+                          {formatCurrency(preset.cost)}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2010,6 +2144,102 @@ export const HardwareInventory: React.FC<HardwareInventoryProps> = ({
         <HardwareExtractionModal
           onClose={() => setShowExtractionModal(false)}
         />
+      )}
+
+      {/* Official Hardware Tariffs & Sync Modal */}
+      {showTariffModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95">
+            {/* Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-blue-900 to-indigo-900 text-white flex items-center justify-between border-b border-blue-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-blue-700/60 border border-blue-400/30 text-white shadow-xs">
+                  <Tag className="w-5 h-5 text-blue-200" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-tight">
+                    Catálogo de Tarifas y Costos Oficiales de Hardware
+                  </h3>
+                  <p className="text-xs text-blue-200">
+                    Tarifario institucional autorizado para Grupo Petroil (Noviembre 2026)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTariffModal(false)}
+                className="p-1.5 rounded-lg text-blue-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto space-y-4">
+              <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-900">
+                <p className="font-semibold">
+                  A continuación se presentan los costos unitarios oficiales para adquisiciones, valuación de activos en almacén y responsivas:
+                </p>
+              </div>
+
+              {/* Pricing Table */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[11px]">
+                    <tr>
+                      <th className="px-4 py-3">Equipo / Categoría</th>
+                      <th className="px-4 py-3">Tipo</th>
+                      <th className="px-4 py-3 text-right">Costo Oficial (MXN)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 font-medium">
+                    {OFFICIAL_HARDWARE_PRICES.map((item, idx) => (
+                      <tr key={item.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-900">{item.label}</div>
+                          <div className="text-[11px] text-slate-500">{item.description}</div>
+                        </td>
+                        <td className="px-4 py-3 capitalize text-slate-600 font-semibold">
+                          {item.category}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-sm text-[#004a99]">
+                          {formatCurrency(item.cost)} MXN
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Cloud Sync info */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="font-bold text-slate-800 block">Sincronización con Base de Datos</span>
+                  <span>Aplica estos costos oficiales a todos los activos existentes registrados en Firestore.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSyncOfficialTariffs}
+                  disabled={isSyncingTariffs}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingTariffs ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingTariffs ? 'Sincronizando...' : 'Actualizar Inventario'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowTariffModal(false)}
+                className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Remote Security & BitLocker Modal */}

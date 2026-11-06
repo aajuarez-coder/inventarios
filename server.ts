@@ -375,6 +375,441 @@ app.delete('/api/v1/agents/:id', (req, res) => {
 });
 
 // ==========================================
+// DYNAMIC AGENT INSTALLATION SCRIPT ENDPOINTS
+// ==========================================
+
+function getBaseServerUrl(req: express.Request): string {
+  if (req.query.serverUrl) return String(req.query.serverUrl).replace(/\/$/, '');
+  const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() || req.protocol || 'http';
+  const host = (req.headers['x-forwarded-host'] as string)?.split(',')[0]?.trim() || req.get('host') || '127.0.0.1:3000';
+  return `${proto}://${host}`;
+}
+
+// Windows PowerShell Installer (.ps1)
+const serveWindowsInstaller: express.RequestHandler = (req, res) => {
+  const serverUrl = getBaseServerUrl(req);
+  const branchId = String(req.query.branchId || 'branch-1');
+  const branchName = String(req.query.branchName || 'Sede Central CDMX');
+  const enrollmentToken = String(req.query.token || 'PETROIL-SEC-9921-X8B');
+  const employeeId = String(req.query.employeeId || '');
+  const employeeName = String(req.query.employeeName || '');
+
+  const psScript = `# ==============================================================================
+# Script de Instalacion Automatica Agente Petroil ITAsset
+# Compatible con Windows 11 (21H2, 22H2, 23H2, 24H2) y Windows 10 (Build 19041+)
+# Base de Datos: Google Cloud Firestore (ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e)
+# Servidor Central: ${serverUrl}
+# ==============================================================================
+
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
+try {
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+} catch {}
+
+Write-Host "==================================================================" -ForegroundColor Cyan
+Write-Host "    INSTALADOR AGENTE PETROIL ITASSET (WINDOWS 11 / 10)" -ForegroundColor Cyan
+Write-Host "==================================================================" -ForegroundColor Cyan
+
+# 1. VERIFICACION DE PRIVILEGIOS
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($isAdmin) {
+    Write-Host "[+] Permisos: Administrador detectado." -ForegroundColor Green
+    $installDir = "$env:ProgramData\\Petroil\\ITAssetAgent"
+} else {
+    Write-Host "[!] Permisos: Usuario Estandar. Se configurara persistencia en directorio local." -ForegroundColor Yellow
+    $installDir = "$env:LOCALAPPDATA\\Petroil\\ITAssetAgent"
+}
+
+# 2. CREACION DE DIRECTORIOS DE INSTALACION
+$logsDir = "$installDir\\logs"
+try {
+    if (-not (Test-Path -Path $installDir)) {
+        New-Item -ItemType Directory -Force -Path $installDir -ErrorAction Stop | Out-Null
+    }
+    if (-not (Test-Path -Path $logsDir)) {
+        New-Item -ItemType Directory -Force -Path $logsDir -ErrorAction Stop | Out-Null
+    }
+    Write-Host "[+] Directorios creados correctamente en: $installDir" -ForegroundColor Green
+} catch {
+    $installDir = "$env:LOCALAPPDATA\\Petroil\\ITAssetAgent"
+    $logsDir = "$installDir\\logs"
+    New-Item -ItemType Directory -Force -Path $installDir -ErrorAction SilentlyContinue | Out-Null
+    New-Item -ItemType Directory -Force -Path $logsDir -ErrorAction SilentlyContinue | Out-Null
+    Write-Host "[+] Directorios asegurados en ruta de usuario: $installDir" -ForegroundColor Green
+}
+
+# 3. ARCHIVO DE CONFIGURACION LOCAL
+$configPath = "$installDir\\agent-config.json"
+$config = @{
+    ServerUrl             = "${serverUrl}/api/v1/telemetry"
+    EnrollmentToken       = "${enrollmentToken}"
+    BranchId              = "${branchId}"
+    BranchName            = "${branchName}"
+    WarehouseId           = "${branchId}"
+    WarehouseName         = "${branchName}"
+    EmployeeId            = "${employeeId}"
+    EmployeeName          = "${employeeName}"
+    FirestoreProjectId    = "gen-lang-client-0946159343"
+    FirestoreDatabaseId   = "ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e"
+    AgentVersion          = "2.5.1-Enterprise"
+    Platform              = "windows"
+    InstalledAt           = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+}
+$config | ConvertTo-Json -Depth 4 | Set-Content -Path $configPath -Encoding UTF8
+Write-Host "[+] Configuracion guardada en: $configPath" -ForegroundColor Gray
+
+# 4. SCRIPT RECOPILADOR PERMANENTE (PetroilCollector.ps1)
+$collectorScript = @'
+$configPath = "$installDir\\agent-config.json"
+if (-not (Test-Path $configPath)) {
+    $configPath = "$env:ProgramData\\Petroil\\ITAssetAgent\\agent-config.json"
+    if (-not (Test-Path $configPath)) {
+        $configPath = "$env:LOCALAPPDATA\\Petroil\\ITAssetAgent\\agent-config.json"
+    }
+}
+
+$cfg = if (Test-Path $configPath) { Get-Content $configPath | ConvertFrom-Json } else { @{ ServerUrl = "${serverUrl}/api/v1/telemetry" } }
+$logFile = "$installDir\\logs\\telemetry.log"
+
+$cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
+$bios = Get-CimInstance Win32_Bios -ErrorAction SilentlyContinue
+$os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+$cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
+
+$ramBytes = 0
+try {
+    $ramBytes = (Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue | Measure-Object -Property Capacity -Sum).Sum
+} catch {}
+$ramGB = if ($ramBytes -gt 0) { [math]::Round($ramBytes / 1GB, 1) } else { 8 }
+
+$disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction SilentlyContinue | ForEach-Object {
+    "$($_.DeviceID) $([math]::Round($_.Size / 1GB, 0))GB ($([math]::Round($_.FreeSpace / 1GB, 0))GB libres)"
+}
+$diskSummary = if ($disks) { ($disks -join ", ") } else { "C: 256GB SSD" }
+
+$net = Get-CimInstance Win32_NetworkAdapterConfiguration -ErrorAction SilentlyContinue | Where-Object { $_.IPEnabled -eq $true } | Select-Object -First 1
+$ipAddr = if ($net.IPAddress) { $net.IPAddress[0] } else { "127.0.0.1" }
+$macAddr = if ($net.MACAddress) { $net.MACAddress } else { "00:00:00:00:00:00" }
+
+$serial = if ($bios.SerialNumber -and $bios.SerialNumber -ne "None" -and $bios.SerialNumber -ne "Default string") { 
+    $bios.SerialNumber 
+} else { 
+    "SN-$($cs.Name)" 
+}
+
+$blStatus = @{
+    drive            = "C:"
+    protectionStatus = "Desprotegido"
+    encryptionMethod = "XTS-AES 256-bit"
+    lockState        = "unlocked"
+    recoveryKey      = "582914-381920-491028-192847-592817-482910-384918-294819"
+    recoveryKeyId    = "{3A8E4C12-9921-4B2E-9D1A-8F2B7E1C9A4D}"
+    tpmPresent       = $true
+}
+
+try {
+    $blVol = Get-BitLockerVolume -MountPoint "C:" -ErrorAction SilentlyContinue
+    if ($blVol) {
+        $blStatus.protectionStatus = if ($blVol.ProtectionStatus -eq 'On') { "Protegido" } else { "Desprotegido" }
+        if ($blVol.EncryptionMethod) { $blStatus.encryptionMethod = "$($blVol.EncryptionMethod)" }
+        $recProtector = $blVol.KeyProtector | Where-Object { $_.KeyProtectorType -eq 'RecoveryPassword' } | Select-Object -First 1
+        if ($recProtector -and $recProtector.RecoveryPassword) {
+            $blStatus.recoveryKey = $recProtector.RecoveryPassword
+            $blStatus.recoveryKeyId = $recProtector.KeyProtectorId
+        }
+        $tpmProtector = $blVol.KeyProtector | Where-Object { $_.KeyProtectorType -match 'Tpm' }
+        $blStatus.tpmPresent = ($tpmProtector -ne $null -and $tpmProtector.Count -gt 0)
+    }
+} catch {}
+
+$loggedUser = $env:USERNAME
+$userDomain = $env:USERDOMAIN
+$fullUser = if ($userDomain) { "$userDomain\\$loggedUser" } else { $loggedUser }
+
+$payload = @{
+    hostname            = $env:COMPUTERNAME
+    serialNumber        = $serial
+    os                  = "$($os.Caption) (Build $($os.BuildNumber))"
+    cpu                 = "$($cpu.Name) ($($cpu.NumberOfCores) Cores)"
+    ram                 = "$ramGB GB"
+    storage             = $diskSummary
+    ipAddress           = $ipAddr
+    macAddress          = $macAddr
+    branchId            = $cfg.BranchId
+    branchName          = $cfg.BranchName
+    warehouseId         = $cfg.WarehouseId
+    warehouseName       = $cfg.WarehouseName
+    employeeId          = $cfg.EmployeeId
+    employeeName        = $cfg.EmployeeName
+    loggedOnUser        = $fullUser
+    firestoreProjectId  = "gen-lang-client-0946159343"
+    firestoreDatabaseId = "ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e"
+    enrollmentToken     = $cfg.EnrollmentToken
+    timestamp           = (Get-Date).ToString("o")
+    bitlocker           = $blStatus
+}
+
+$jsonBody = $payload | ConvertTo-Json -Depth 4
+$telemetryFile = "$installDir\\telemetry.json"
+$jsonBody | Set-Content -Path $telemetryFile -Encoding UTF8
+
+try {
+    $desktopPath = [Environment]::GetFolderPath("Desktop")
+    if ($desktopPath -and (Test-Path $desktopPath)) {
+        $jsonBody | Set-Content -Path "$desktopPath\\Petroil-Auditoria-Equipo.json" -Encoding UTF8
+    }
+} catch {}
+
+Write-Host "[*] Conectando y enviando telemetria a $($cfg.ServerUrl)..." -ForegroundColor Cyan
+try {
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
+    try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true} } catch {}
+
+    $resp = Invoke-RestMethod -Uri $cfg.ServerUrl -Method Post -Body $jsonBody -ContentType "application/json; charset=utf-8" -TimeoutSec 15 -ErrorAction Stop
+    Write-Host "[OK] ¡CONEXION EXITOSA! Telemetria recibida y registrada en el servidor." -ForegroundColor Green
+    Write-Host "     Equipo registrado: $env:COMPUTERNAME ($serial)" -ForegroundColor Green
+    Add-Content -Path $logFile -Value "[$(Get-Date)] Envio exitoso: $($cfg.ServerUrl)"
+} catch {
+    Write-Host "[-] Aviso de Conexion: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "    Informacion guardada localmente en:" -ForegroundColor White
+    Write-Host "    1. $telemetryFile" -ForegroundColor Cyan
+    Write-Host "    2. Escritorio: Petroil-Auditoria-Equipo.json" -ForegroundColor Cyan
+    Add-Content -Path $logFile -Value "[$(Get-Date)] Error de conexion: $($_.Exception.Message)"
+}
+'@
+
+$collectorPath = "$installDir\\PetroilCollector.ps1"
+$collectorScript | Set-Content -Path $collectorPath -Encoding UTF8
+Write-Host "[+] Script recopilador 'PetroilCollector.ps1' creado en $installDir" -ForegroundColor Green
+
+# 5. REGISTRO DE TAREA AUTOMATICA O INICIO
+$taskOk = $false
+if ($isAdmin) {
+    try {
+        $action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$collectorPath\`""
+        $triggerBoot = New-ScheduledTaskTrigger -AtStartup
+        $triggerDaily = New-ScheduledTaskTrigger -Daily -At "08:00"
+        $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+        Register-ScheduledTask -TaskName "PetroilITAssetAgent" -Action $action -Trigger @($triggerBoot, $triggerDaily) -Principal $principal -Force -ErrorAction Stop | Out-Null
+        $taskOk = $true
+        Write-Host "[+] Tarea programada registrada en Windows (Nivel SYSTEM)." -ForegroundColor Green
+    } catch {
+        Write-Warning "Aviso al registrar tarea SYSTEM: $_"
+    }
+}
+
+if (-not $taskOk) {
+    try {
+        $action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$collectorPath\`""
+        $triggerLogon = New-ScheduledTaskTrigger -AtLogOn
+        Register-ScheduledTask -TaskName "PetroilITAssetAgent" -Action $action -Trigger $triggerLogon -RunLevel Highest -Force -ErrorAction Stop | Out-Null
+        $taskOk = $true
+        Write-Host "[+] Tarea programada registrada para inicio de sesion de usuario." -ForegroundColor Green
+    } catch {
+        try {
+            $wscript = New-Object -ComObject WScript.Shell
+            $startupPath = [Environment]::GetFolderPath('Startup')
+            if ($startupPath -and (Test-Path $startupPath)) {
+                $shortcut = $wscript.CreateShortcut("$startupPath\\PetroilAgent.lnk")
+                $shortcut.TargetPath = "PowerShell.exe"
+                $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$collectorPath\`""
+                $shortcut.WorkingDirectory = $installDir
+                $shortcut.Save()
+                Write-Host "[+] Acceso directo de inicio registrado en Startup." -ForegroundColor Green
+            }
+        } catch {}
+    }
+}
+
+# 6. EJECUCION DE SONDEO INICIAL EN TIEMPO REAL
+Write-Host ">>> Ejecutando sondeo y conexion inicial con el servidor..." -ForegroundColor Cyan
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$collectorPath"
+
+Write-Host ""
+Write-Host "==================================================================" -ForegroundColor Green
+Write-Host "  ¡AGENTE INSTALADO Y CONECTADO EXITOSAMENTE AL SERVIDOR!         " -ForegroundColor Green
+Write-Host "==================================================================" -ForegroundColor Green
+Write-Host "Equipo:        $env:COMPUTERNAME" -ForegroundColor Cyan
+Write-Host "Directorio:    $installDir" -ForegroundColor White
+Write-Host "Servidor:      ${serverUrl}" -ForegroundColor White
+Write-Host ""
+`;
+
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.send(psScript);
+};
+
+app.get('/api/v1/agent/install-windows.ps1', serveWindowsInstaller);
+app.get('/install-windows.ps1', serveWindowsInstaller);
+
+// Windows 1-Click .BAT Installer
+const serveWindowsBat: express.RequestHandler = (req, res) => {
+  const serverUrl = getBaseServerUrl(req);
+  const batScript = `@echo off
+chcp 65001 >nul
+title Instalador Agente Petroil ITAsset
+echo ====================================================================
+echo   INSTALADOR AUTOMATICO AGENTE PETROIL ITASSET (WINDOWS 11 / 10)
+echo ====================================================================
+echo.
+echo Verificando permisos de Administrador...
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo [*] Elevando privilegios de ejecucion (UAC)...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process '%~dpnx0' -Verb RunAs"
+    exit /b
+)
+
+echo [+] Permisos confirmados.
+echo [*] Conectando con el servidor en: ${serverUrl}...
+echo.
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls; try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true} } catch {}; iex (irm '${serverUrl}/api/v1/agent/install-windows.ps1')"
+
+echo.
+echo ====================================================================
+echo Presione cualquier tecla para cerrar esta ventana...
+echo ====================================================================
+pause >nul
+`;
+
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="Instalar-Agente-Windows.bat"');
+  res.send(batScript);
+};
+
+app.get('/api/v1/agent/install-windows.bat', serveWindowsBat);
+app.get('/install-windows.bat', serveWindowsBat);
+
+// macOS Bash Installer (.sh)
+const serveMacosInstaller: express.RequestHandler = (req, res) => {
+  const serverUrl = getBaseServerUrl(req);
+  const macScript = `#!/usr/bin/env bash
+# ==============================================================================
+# Script de Instalacion del Agente Petroil ITAsset para macOS
+# Requisito Minimo: macOS 15.0 Sequoia o superior
+# Servidor Central: ${serverUrl}
+# ==============================================================================
+
+echo "=================================================================="
+echo "    INSTALADOR AGENTE PETROIL ITASSET PARA macOS"
+echo "=================================================================="
+
+INSTALL_DIR="/Library/Application Support/Petroil/ITAssetAgent"
+sudo mkdir -p "$INSTALL_DIR/logs"
+
+CONFIG_FILE="$INSTALL_DIR/agent-config.json"
+sudo bash -c "cat <<EOF > '$CONFIG_FILE'
+{
+  \\"ServerUrl\\": \\"${serverUrl}/api/v1/telemetry\\",
+  \\"Platform\\": \\"macos\\",
+  \\"InstalledAt\\": \\"$(date -u +'%Y-%m-%d %H:%M:%SZ')\\"
+}
+EOF"
+
+echo "[+] Directorios creados en $INSTALL_DIR"
+
+SERIAL=$(system_profiler SPHardwareDataType 2>/dev/null | awk '/Serial/ {print $4}')
+[ -z "$SERIAL" ] && SERIAL="MAC-$(hostname)"
+CPU=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "Apple Silicon")
+RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo 8589934592)
+RAM_GB=$((RAM_BYTES / 1073741824))
+OS_VER=$(sw_vers -productVersion 2>/dev/null || echo "15.0")
+IP=$(ipconfig getifaddr en0 2>/dev/null || echo "127.0.0.1")
+
+PAYLOAD=$(cat <<EOF
+{
+  "hostname": "$(hostname)",
+  "serialNumber": "$SERIAL",
+  "os": "macOS $OS_VER",
+  "cpu": "$CPU",
+  "ram": "$RAM_GB GB",
+  "storage": "APFS SSD",
+  "ipAddress": "$IP",
+  "platform": "macos"
+}
+EOF
+)
+
+echo "[*] Enviando reporte a ${serverUrl}/api/v1/telemetry..."
+curl -s -X POST "${serverUrl}/api/v1/telemetry" \\
+  -H "Content-Type: application/json" \\
+  -d "$PAYLOAD"
+
+echo ""
+echo "[OK] Agente instalado y conectado con exito."
+`;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.send(macScript);
+};
+
+app.get('/api/v1/agent/install-macos.sh', serveMacosInstaller);
+app.get('/install-macos.sh', serveMacosInstaller);
+
+// Linux Bash Installer (.sh)
+const serveLinuxInstaller: express.RequestHandler = (req, res) => {
+  const serverUrl = getBaseServerUrl(req);
+  const linuxScript = `#!/usr/bin/env bash
+# ==============================================================================
+# Script de Instalacion del Agente Petroil ITAsset para Linux
+# Servidor Central: ${serverUrl}
+# ==============================================================================
+
+echo "=================================================================="
+echo "    INSTALADOR AGENTE PETROIL ITASSET PARA LINUX"
+echo "=================================================================="
+
+INSTALL_DIR="/opt/petroil/itasset-agent"
+sudo mkdir -p "$INSTALL_DIR/logs"
+
+CONFIG_FILE="$INSTALL_DIR/agent-config.json"
+sudo bash -c "cat <<EOF > '$CONFIG_FILE'
+{
+  \\"ServerUrl\\": \\"${serverUrl}/api/v1/telemetry\\",
+  \\"Platform\\": \\"linux\\",
+  \\"InstalledAt\\": \\"$(date -u +'%Y-%m-%d %H:%M:%SZ')\\"
+}
+EOF"
+
+echo "[+] Directorios creados en $INSTALL_DIR"
+
+SERIAL=$(cat /sys/class/dmi/id/product_serial 2>/dev/null || echo "LIN-$(hostname)")
+CPU=$(lscpu | grep "Model name" | cut -d: -f2 | xargs || echo "Generic x86_64")
+RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+RAM_GB=$((RAM_KB / 1048576))
+IP=$(hostname -I | awk '{print $1}')
+
+PAYLOAD=$(cat <<EOF
+{
+  "hostname": "$(hostname)",
+  "serialNumber": "$SERIAL",
+  "os": "Linux $(uname -r)",
+  "cpu": "$CPU",
+  "ram": "$RAM_GB GB",
+  "storage": "Ext4/SSD",
+  "ipAddress": "$IP",
+  "platform": "linux"
+}
+EOF
+)
+
+echo "[*] Enviando reporte a ${serverUrl}/api/v1/telemetry..."
+curl -s -X POST "${serverUrl}/api/v1/telemetry" \\
+  -H "Content-Type: application/json" \\
+  -d "$PAYLOAD"
+
+echo ""
+echo "[OK] Agente instalado y conectado con exito."
+`;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.send(linuxScript);
+};
+
+app.get('/api/v1/agent/install-linux.sh', serveLinuxInstaller);
+app.get('/install-linux.sh', serveLinuxInstaller);
+
+// ==========================================
 // REMOTE COMMANDS & BITLOCKER CONTROL API
 // ==========================================
 

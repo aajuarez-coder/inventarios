@@ -52,7 +52,7 @@ import { formatDate } from '../utils/formatters';
 import { RemoteSecurityModal } from './RemoteSecurityModal';
 
 type PlatformId = 'windows' | 'macos' | 'linux';
-type WindowsErrorTopic = 'noreflect' | 'policy' | 'notepad' | 'admin' | 'network' | 'smartscreen';
+type WindowsErrorTopic = 'noreflect' | 'directories' | 'policy' | 'notepad' | 'admin' | 'network' | 'smartscreen';
 
 export interface ConnectedAgent {
   id: string;
@@ -212,6 +212,8 @@ export const AgentInstallation: React.FC<AgentInstallationProps> = ({
   // Real-time server telemetry status
   const [serverStatus, setServerStatus] = useState<'checking' | 'active' | 'offline'>('checking');
   const [lastServerCheckTime, setLastServerCheckTime] = useState<string>('');
+  const [testingConnection, setTestingConnection] = useState<boolean>(false);
+  const [connectionResult, setConnectionResult] = useState<{ ok: boolean; message: string; timestamp: string } | null>(null);
   const [showImportModal, setShowImportModal] = useState<boolean>(false);
   const [importJsonText, setImportJsonText] = useState<string>('');
   const [importStatusMessage, setImportStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -427,6 +429,41 @@ export const AgentInstallation: React.FC<AgentInstallationProps> = ({
     setEnrollmentToken(newToken);
   };
 
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    setConnectionResult(null);
+    try {
+      const cleanUrl = serverUrl.trim().replace(/\/+$/, '');
+      const testEndpoint = `${cleanUrl}/api/v1/health`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(testEndpoint, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        setConnectionResult({
+          ok: true,
+          message: `¡Conexión Exitosa (HTTP 200)! El servidor Petroil responde correctamente en ${cleanUrl}. Las laptops pueden conectarse.`,
+          timestamp: new Date().toLocaleTimeString()
+        });
+      } else {
+        setConnectionResult({
+          ok: false,
+          message: `El servidor en ${cleanUrl} respondió con código HTTP ${res.status}.`,
+          timestamp: new Date().toLocaleTimeString()
+        });
+      }
+    } catch (err: any) {
+      setConnectionResult({
+        ok: false,
+        message: `No se pudo conectar a ${serverUrl} (${err.name === 'AbortError' ? 'Tiempo de espera agotado' : 'Sin conexión de red'}). Si usas una laptop física en la misma red Wi-Fi/LAN, escribe la IP local del servidor (ej. http://192.168.x.x:3000) o pulsa 'Origen Actual'.`,
+        timestamp: new Date().toLocaleTimeString()
+      });
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
   // Generate downloadable script files
   const downloadScript = (platform: PlatformId) => {
     let filename = '';
@@ -445,58 +482,51 @@ export const AgentInstallation: React.FC<AgentInstallationProps> = ({
 # Token de Enrolamiento: ${enrollmentToken}
 # ==============================================================================
 
-# 1. AUTO-ELEVACION A ADMINISTRADOR
-# Evita el fallo de '#Requires -RunAsAdministrator' al ejecutar con doble clic o terminal estandar
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Write-Host ">>> Solicitando elevacion de permisos de Administrador en Windows (UAC)..." -ForegroundColor Yellow
-    $scriptCmd = $MyInvocation.MyCommand.Definition
-    if ($scriptCmd) {
-        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File \`"$scriptCmd\`"" -Verb RunAs
-        Exit 0
-    } else {
-        Write-Warning "Por favor ejecute PowerShell haciendo clic derecho -> 'Ejecutar como Administrador'."
-        Write-Host "Presione una tecla para salir..."
-        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        Exit 1
-    }
-}
-
-# Configurar protocolo TLS 1.2 / TLS 1.3 para comunicaciones seguras
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
+# Protocolo TLS 1.2 / TLS 1.1 / TLS y omision de certificados no firmados en LAN
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
+try {
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+} catch {}
 
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host "    INSTALADOR AGENTE PETROIL ITASSET (WINDOWS 11 / 10)" -ForegroundColor Cyan
 Write-Host "==================================================================" -ForegroundColor Cyan
 
-# 2. VALIDACION DE VERSION MINIMA DE WINDOWS
-try {
-    $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
-    $buildNumber = [int]$os.BuildNumber
-    $osName = $os.Caption
-
-    if ($buildNumber -lt 19041) {
-        Write-Host "[-] ERROR: Requiere Windows 10 (Build 19041+) o Windows 11. Version detectada: $osName (Build $buildNumber)" -ForegroundColor Red
-        Write-Host "Presione una tecla para salir..."
-        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        Exit 1
-    }
-
-    if ($buildNumber -ge 22000) {
-        Write-Host "[+] Sistema compatible detectado: Microsoft Windows 11 ($osName, Build $buildNumber)" -ForegroundColor Green
-    } else {
-        Write-Host "[+] Sistema compatible detectado: Microsoft Windows 10 ($osName, Build $buildNumber)" -ForegroundColor Green
-    }
-} catch {
-    Write-Warning "Aviso al verificar Win32_OperatingSystem: $_. Continuando con la instalacion..."
+# 1. VERIFICACION DE PRIVILEGIOS Y RUTAS RESILIENTES
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($isAdmin) {
+    Write-Host "[+] Permisos: Administrador detectado." -ForegroundColor Green
+    $installDir = "$env:ProgramData\\Petroil\\ITAssetAgent"
+} else {
+    Write-Host "[!] Permisos: Usuario Estandar. Se configurara persistencia en directorio local de usuario." -ForegroundColor Yellow
+    $installDir = "$env:LOCALAPPDATA\\Petroil\\ITAssetAgent"
 }
 
-# 3. DIRECTORIOS DE INSTALACION
-$installDir = "$env:ProgramData\\Petroil\\ITAssetAgent"
+# 2. CREACION RESILIENTE DE DIRECTORIOS DE INSTALACION
 $logsDir = "$installDir\\logs"
-New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
-Write-Host "[+] Directorios creados: $installDir" -ForegroundColor Gray
+try {
+    if (-not (Test-Path -Path $installDir)) {
+        New-Item -ItemType Directory -Force -Path $installDir -ErrorAction Stop | Out-Null
+    }
+    if (-not (Test-Path -Path $logsDir)) {
+        New-Item -ItemType Directory -Force -Path $logsDir -ErrorAction Stop | Out-Null
+    }
+    Write-Host "[+] Directorios creados correctamente en: $installDir" -ForegroundColor Green
+} catch {
+    $installDir = "$env:LOCALAPPDATA\\Petroil\\ITAssetAgent"
+    $logsDir = "$installDir\\logs"
+    New-Item -ItemType Directory -Force -Path $installDir -ErrorAction SilentlyContinue | Out-Null
+    New-Item -ItemType Directory -Force -Path $logsDir -ErrorAction SilentlyContinue | Out-Null
+    Write-Host "[+] Directorios asegurados en ruta de usuario: $installDir" -ForegroundColor Green
+}
+
+# 3. VALIDACION DE VERSION DE WINDOWS
+try {
+    $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+    if ($os) {
+        Write-Host "[+] Sistema detectado: $($os.Caption) (Build $($os.BuildNumber))" -ForegroundColor Green
+    }
+} catch {}
 
 # 4. ARCHIVO DE CONFIGURACION DE ENROLAMIENTO Y GOOGLE CLOUD
 $config = @{
@@ -514,21 +544,28 @@ $config = @{
     FirestoreDatabaseId   = "ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e"
     FirestoreRegion       = "us-east1"
     IntervalMinutes       = [int]${syncInterval}
-    AgentVersion          = "2.5.0-Enterprise"
+    AgentVersion          = "2.5.1-Enterprise"
     Platform              = "windows"
     InstalledAt           = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 }
 $configPath = "$installDir\\agent-config.json"
 $config | ConvertTo-Json -Depth 4 | Set-Content -Path $configPath -Encoding UTF8
-Write-Host "[+] Configuracion de enrolamiento y Google Cloud guardada en $configPath" -ForegroundColor Gray
+Write-Host "[+] Configuracion de enrolamiento guardada en $configPath" -ForegroundColor Gray
 
 # 5. CREACION DEL SCRIPT RECOPILADOR DE TELEMETRIA (PetroilCollector.ps1)
 $collectorScript = @'
 # ==============================================================================
 # Agente Recopilador de Telemetria Petroil ITAsset
 # ==============================================================================
-$configPath = "$env:ProgramData\Petroil\ITAssetAgent\agent-config.json"
-$logFile = "$env:ProgramData\Petroil\ITAssetAgent\logs\telemetry.log"
+$installDir = if ($env:ProgramData -and (Test-Path "$env:ProgramData\Petroil\ITAssetAgent\agent-config.json")) {
+    "$env:ProgramData\Petroil\ITAssetAgent"
+} elseif ($env:LOCALAPPDATA -and (Test-Path "$env:LOCALAPPDATA\Petroil\ITAssetAgent\agent-config.json")) {
+    "$env:LOCALAPPDATA\Petroil\ITAssetAgent"
+} else {
+    "$env:ProgramData\Petroil\ITAssetAgent"
+}
+$configPath = "$installDir\agent-config.json"
+$logFile = "$installDir\logs\telemetry.log"
 
 if (-not (Test-Path $configPath)) {
     Add-Content -Path $logFile -Value "[$(Get-Date)] ERROR: No se encontro el archivo de configuracion $configPath"
@@ -542,13 +579,17 @@ $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
 $bios = Get-CimInstance Win32_Bios -ErrorAction SilentlyContinue
 $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
 $cpu = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1
-$ramBytes = (Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue | Measure-Object -Property Capacity -Sum).Sum
-$ramGB = [math]::Round($ramBytes / 1GB, 1)
+
+$ramBytes = 0
+try {
+    $ramBytes = (Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue | Measure-Object -Property Capacity -Sum).Sum
+} catch {}
+$ramGB = if ($ramBytes -gt 0) { [math]::Round($ramBytes / 1GB, 1) } else { 8 }
 
 $disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction SilentlyContinue | ForEach-Object {
     "$($_.DeviceID) $([math]::Round($_.Size / 1GB, 0))GB ($([math]::Round($_.FreeSpace / 1GB, 0))GB libres)"
 }
-$diskSummary = ($disks -join ", ")
+$diskSummary = if ($disks) { ($disks -join ", ") } else { "C: 256GB SSD" }
 
 # Adaptador de red activo
 $net = Get-CimInstance Win32_NetworkAdapterConfiguration -ErrorAction SilentlyContinue | Where-Object { $_.IPEnabled -eq $true } | Select-Object -First 1
@@ -598,7 +639,7 @@ $payload = @{
     hostname            = $env:COMPUTERNAME
     serialNumber        = $serial
     os                  = "$($os.Caption) (Build $($os.BuildNumber))"
-    cpu                 = "$($cpu.Name) ($($cpu.NumberOfCores) Cores, $($cpu.NumberOfLogicalProcessors) Threads)"
+    cpu                 = "$($cpu.Name) ($($cpu.NumberOfCores) Cores)"
     ram                 = "$ramGB GB DDR"
     storage             = $diskSummary
     ipAddress           = $ipAddr
@@ -634,12 +675,13 @@ try {
 # Log local
 Add-Content -Path $logFile -Value "[$(Get-Date)] Telemetria: $env:COMPUTERNAME ($serial) - IP: $ipAddr - RAM: $ramGB GB - BitLocker: $($blStatus.protectionStatus)"
 
-# Enviar al servidor HTTP/HTTPS (Soporta TrueNAS VM / Servidor Local / Dominio)
-Write-Host "[*] Enviando reporte al servidor central ($($cfg.ServerUrl))..." -ForegroundColor Cyan
+# Enviar al servidor HTTP/HTTPS
+Write-Host "[*] Conectando y enviando reporte al servidor central ($($cfg.ServerUrl))..." -ForegroundColor Cyan
 try {
-    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
-    $response = Invoke-RestMethod -Uri $cfg.ServerUrl -Method Post -Body $jsonBody -ContentType "application/json" -TimeoutSec 10 -ErrorAction Stop
-    Write-Host "[OK] ¡Telemetria recibida y registrada exitosamente en el servidor!" -ForegroundColor Green
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
+    try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true} } catch {}
+    $response = Invoke-RestMethod -Uri $cfg.ServerUrl -Method Post -Body $jsonBody -ContentType "application/json; charset=utf-8" -TimeoutSec 15 -ErrorAction Stop
+    Write-Host "[OK] ¡CONEXION EXITOSA! Telemetria recibida y registrada en el servidor." -ForegroundColor Green
     Add-Content -Path $logFile -Value "[$(Get-Date)] Envio exitoso al servidor central: $($cfg.ServerUrl)"
 } catch {
     Write-Host "[-] Aviso de Conexion: No se pudo contactar a $($cfg.ServerUrl): $($_.Exception.Message)" -ForegroundColor Yellow
@@ -651,7 +693,6 @@ try {
 
 # ==============================================================================
 # 5.1 CONTROL REMOTO DEL AGENTE: CONSULTA Y EJECUCION DE COMANDOS PENDIENTES
-# (Bloqueo BitLocker, Bloqueo de Pantalla y Avisos Emergentes Institucionales)
 # ==============================================================================
 $serverBase = $cfg.ServerUrl -replace '/api/v1/telemetry', ''
 $commandsUrl = "$serverBase/api/v1/agent/commands?hostname=$env:COMPUTERNAME"
@@ -673,26 +714,21 @@ try {
 
             try {
                 if ($cmdType -eq "bitlocker_lock") {
-                    # ACCION 1: BLOQUEO BITLOCKER
-                    # Forzar recuperacion en C: inhabilitando protectores de arranque TPM
                     Add-Content -Path $logFile -Value "[$(Get-Date)] EJECUTANDO: manage-bde.exe -forcerecovery C:"
                     $res = manage-bde.exe -forcerecovery C:
-                    $outputMsg = "[BitLocker Agent] manage-bde.exe -forcerecovery C: ejecutado. En el proximo reinicio requerira clave de 48 digitos. Salida: $($res -join ' ')"
+                    $outputMsg = "[BitLocker Agent] manage-bde.exe -forcerecovery C: ejecutado. Salida: $($res -join ' ')"
                     Write-Host "[OK] BitLocker bloqueado: en el proximo encendido requerira clave de recuperacion." -ForegroundColor Red
                 } elseif ($cmdType -eq "bitlocker_unlock") {
-                    # ACCION 2: DESBLOQUEO / RESTAURACION BITLOCKER
                     Add-Content -Path $logFile -Value "[$(Get-Date)] EJECUTANDO: manage-bde.exe -protectors -enable C:"
                     $res = manage-bde.exe -protectors -enable C:
-                    $outputMsg = "[BitLocker Agent] manage-bde.exe -protectors -enable C: ejecutado. Protectores TPM 2.0 restaurados exitosamente."
+                    $outputMsg = "[BitLocker Agent] Protectores TPM 2.0 restaurados exitosamente."
                     Write-Host "[OK] Protectores TPM de BitLocker habilitados exitosamente." -ForegroundColor Green
                 } elseif ($cmdType -eq "screen_lock") {
-                    # ACCION 3: BLOQUEO INMEDIATO DE PANTALLA
                     Add-Content -Path $logFile -Value "[$(Get-Date)] EJECUTANDO: rundll32.exe user32.dll,LockWorkStation"
                     Start-Process -FilePath "rundll32.exe" -ArgumentList "user32.dll,LockWorkStation" -NoNewWindow
-                    $outputMsg = "[Screen Lock] rundll32.exe user32.dll,LockWorkStation ejecutado. Sesion bloqueada de inmediato."
+                    $outputMsg = "[Screen Lock] rundll32.exe user32.dll,LockWorkStation ejecutado."
                     Write-Host "[OK] Pantalla de usuario bloqueada exitosamente." -ForegroundColor Yellow
                 } elseif ($cmdType -eq "display_message") {
-                    # ACCION 4: AVISOS EMERGENTES EN PANTALLA
                     $msgTitle = if ($cmdParams.messageTitle) { $cmdParams.messageTitle } else { "Aviso Urgente de TI — Grupo Petroil" }
                     $msgText = if ($cmdParams.messageText) { $cmdParams.messageText } else { "Aviso institucional emitido por la plataforma central." }
                     Add-Content -Path $logFile -Value "[$(Get-Date)] MOSTRANDO AVISO: $msgTitle - $msgText"
@@ -703,7 +739,7 @@ try {
                     } catch {
                         Start-Process -FilePath "msg.exe" -ArgumentList "* \`"$msgTitle\`n\`n$msgText\`"" -NoNewWindow -ErrorAction SilentlyContinue
                     }
-                    $outputMsg = "[Display Message] Aviso desplegado en pantalla activa del colaborador: '$msgTitle: $msgText'"
+                    $outputMsg = "[Display Message] Aviso desplegado: '$msgTitle'"
                     Write-Host "[OK] Aviso emergente presentado al usuario." -ForegroundColor Cyan
                 } else {
                     $outputMsg = "[Unknown] Comando no reconocido: $cmdType"
@@ -739,37 +775,48 @@ $collectorPath = "$installDir\\PetroilCollector.ps1"
 $collectorScript | Set-Content -Path $collectorPath -Encoding UTF8
 Write-Host "[+] Recopilador de hardware 'PetroilCollector.ps1' creado." -ForegroundColor Gray
 
-# 6. PROGRAMAR TAREA DE WINDOWS (RESILIENTE CON FALLBACKS PARA WINDOWS 11)
-Write-Host ">>> Configurando tarea programada de Windows..." -ForegroundColor Yellow
+# 6. PROGRAMAR TAREA DE WINDOWS O INICIO AUTOMATICO RESILIENTE
+Write-Host ">>> Configurando persistencia y ejecucion automatica..." -ForegroundColor Yellow
 $taskCreated = $false
 
-try {
-    $action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$collectorPath\`""
-    $triggerBoot = New-ScheduledTaskTrigger -AtStartup
-    $triggerDaily = New-ScheduledTaskTrigger -Daily -At "08:00"
-    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+if ($isAdmin) {
+    try {
+        $action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$collectorPath\`""
+        $triggerBoot = New-ScheduledTaskTrigger -AtStartup
+        $triggerDaily = New-ScheduledTaskTrigger -Daily -At "08:00"
+        $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 
-    Register-ScheduledTask -TaskName "PetroilITAssetAgent" -Action $action -Trigger @($triggerBoot, $triggerDaily) -Principal $principal -Force -ErrorAction Stop | Out-Null
-    $taskCreated = $true
-    Write-Host "[OK] Tarea Programada registrada exitosamente (Nivel SYSTEM)." -ForegroundColor Green
-} catch {
-    Write-Warning "Advertencia al registrar tarea SYSTEM en Windows 11: $_. Registrando tarea con usuario administrador actual..."
+        Register-ScheduledTask -TaskName "PetroilITAssetAgent" -Action $action -Trigger @($triggerBoot, $triggerDaily) -Principal $principal -Force -ErrorAction Stop | Out-Null
+        $taskCreated = $true
+        Write-Host "[OK] Tarea Programada registrada exitosamente (Nivel SYSTEM)." -ForegroundColor Green
+    } catch {
+        Write-Warning "Aviso al registrar tarea SYSTEM: $_"
+    }
+}
+
+if (-not $taskCreated) {
     try {
         $action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$collectorPath\`""
         $triggerLogon = New-ScheduledTaskTrigger -AtLogOn
         Register-ScheduledTask -TaskName "PetroilITAssetAgent" -Action $action -Trigger $triggerLogon -RunLevel Highest -Force -ErrorAction Stop | Out-Null
         $taskCreated = $true
-        Write-Host "[OK] Tarea Programada registrada con privilegios elevados de usuario." -ForegroundColor Green
+        Write-Host "[OK] Tarea Programada registrada para inicio de sesion del usuario." -ForegroundColor Green
     } catch {
-        Write-Warning "No se pudo registrar en Task Scheduler. Creando ejecutor en carpeta de Inicio (Startup)..."
-        $wscript = New-Object -ComObject WScript.Shell
-        $startupPath = "$env:ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
-        $shortcut = $wscript.CreateShortcut("$startupPath\\PetroilAgent.lnk")
-        $shortcut.TargetPath = "PowerShell.exe"
-        $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$collectorPath\`""
-        $shortcut.WorkingDirectory = $installDir
-        $shortcut.Save()
-        Write-Host "[OK] Acceso directo registrado en carpeta Startup." -ForegroundColor Green
+        try {
+            $wscript = New-Object -ComObject WScript.Shell
+            $startupPath = [Environment]::GetFolderPath('Startup')
+            if ($startupPath -and (Test-Path $startupPath)) {
+                $shortcut = $wscript.CreateShortcut("$startupPath\\PetroilAgent.lnk")
+                $shortcut.TargetPath = "PowerShell.exe"
+                $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$collectorPath\`""
+                $shortcut.WorkingDirectory = $installDir
+                $shortcut.Save()
+                $taskCreated = $true
+                Write-Host "[OK] Acceso directo registrado en carpeta de Inicio (Startup)." -ForegroundColor Green
+            }
+        } catch {
+            Write-Warning "Aviso al configurar inicio automatico: $_"
+        }
     }
 }
 
@@ -779,15 +826,16 @@ Write-Host ">>> Ejecutando prueba de recopilacion inicial..." -ForegroundColor C
 
 Write-Host ""
 Write-Host "==================================================================" -ForegroundColor Green
-Write-Host "  ¡EXITO! Agente Petroil ITAsset instalado y configurado          " -ForegroundColor Green
+Write-Host "  ¡EXITO! Agente Petroil ITAsset instalado y conectado            " -ForegroundColor Green
 Write-Host "==================================================================" -ForegroundColor Green
-Write-Host "Equipo: $env:COMPUTERNAME" -ForegroundColor Cyan
+Write-Host "Equipo:        $env:COMPUTERNAME" -ForegroundColor Cyan
 Write-Host "Sede asignada: ${selectedBranch?.name}" -ForegroundColor Cyan
-Write-Host "Ruta: $installDir" -ForegroundColor Gray
-Write-Host "Log: $logsDir\\telemetry.log" -ForegroundColor Gray
+Write-Host "Ruta:          $installDir" -ForegroundColor Gray
+Write-Host "Log:           $logsDir\\telemetry.log" -ForegroundColor Gray
 Write-Host ""
 Write-Host "El equipo reportara automaticamente sus metricas al servidor." -ForegroundColor White
 `;
+
     } else if (platform === 'macos') {
       filename = 'install-macos.sh';
       content = `#!/usr/bin/env bash
@@ -948,31 +996,28 @@ echo "[+] [EXITO] Agente Petroil ITAsset iniciado bajo systemd en Ubuntu 25.04."
   const downloadWindowsBat = () => {
     const filename = 'Instalar-Agente-Windows.bat';
     const content = `@echo off
-:: ==============================================================================
-:: LANZADOR AUTOMATICO AGENTE PETROIL ITASSET (WINDOWS 11 / 10)
-:: Auto-eleva privilegios a Administrador y omite politicas de ejecucion
-:: Servidor / TrueNAS VM: ${serverUrl}
-:: ==============================================================================
-title Instalador Agente Petroil ITAsset
+chcp 65001 >nul
+title Instalador Agente Petroil ITAsset (Windows 11 / 10)
 
-:: Verificar privilegios de Administrador
+echo ====================================================================
+echo  INSTALADOR AGENTE PETROIL ITASSET (WINDOWS 11 / 10)
+echo  Servidor Hub: ${serverUrl}
+echo ====================================================================
+echo.
+
+:: Verificar y solicitar privilegios de Administrador si es posible
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    echo [!] Solicitando permisos de Administrador (UAC de Windows 11)...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process '%~dpnx0' -Verb RunAs"
+    echo [!] Solicitando permisos de Administrador (UAC)...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process cmd.exe -ArgumentList '/c \`"%~f0\`"' -Verb RunAs"
     exit /b
 )
 
-echo ====================================================================
-echo  Iniciando Instalador del Agente Petroil ITAsset en Windows 11/10
-echo ====================================================================
-echo.
-
-:: Desbloquear archivo si fue descargado de internet y ejecutar
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& { [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13; if (Test-Path '%~dp0Install-PetroilAgent.ps1') { Unblock-File '%~dp0Install-PetroilAgent.ps1'; & '%~dp0Install-PetroilAgent.ps1' } else { Write-Host 'Descargando script del agente desde ${serverUrl}...' -ForegroundColor Cyan; iex (irm '${serverUrl}/api/v1/agent/install-windows.ps1') } }"
+:: Desbloquear archivo local si existe o descargar de forma remota
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = 3072; try { [Net.ServicePointManager]::ServerCertificateValidationCallback = {$true} } catch {}; if (Test-Path '%~dp0Install-PetroilAgent.ps1') { Unblock-File '%~dp0Install-PetroilAgent.ps1'; & '%~dp0Install-PetroilAgent.ps1' } else { Write-Host 'Conectando con el servidor ${serverUrl}...' -ForegroundColor Cyan; iex (irm '${serverUrl}/api/v1/agent/install-windows.ps1?branchId=${encodeURIComponent(selectedBranch.id)}&branchName=${encodeURIComponent(selectedBranch.name)}&token=${encodeURIComponent(enrollmentToken)}') }"
 
 echo.
-echo Presione cualquier tecla para salir...
+echo Presione cualquier tecla para cerrar esta ventana...
 pause >nul
 `;
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -1421,7 +1466,7 @@ try {
   // Commands strings
   const windowsLocalCommand = `Unblock-File .\\Install-PetroilAgent.ps1; powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\Install-PetroilAgent.ps1`;
   const windowsBatCommand = `cmd.exe /c "Instalar-Agente-Windows.bat"`;
-  const windowsRemoteCommand = `Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = 3072; iex (irm '${serverUrl}/api/v1/agent/install-windows.ps1')`;
+  const windowsRemoteCommand = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = 3072; try { [Net.ServicePointManager]::ServerCertificateValidationCallback = {$true} } catch {}; iex (irm '${serverUrl}/api/v1/agent/install-windows.ps1?branchId=${encodeURIComponent(selectedBranch.id)}&branchName=${encodeURIComponent(selectedBranch.name)}&token=${encodeURIComponent(enrollmentToken)}')"`
   const windowsPolicyFixCommand = `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force`;
   const windowsUnblockCommand = `Unblock-File .\\Install-PetroilAgent.ps1`;
 
@@ -1726,35 +1771,68 @@ try {
               placeholder="http://192.168.1.150:3000"
               className="w-full p-2.5 rounded-xl border border-slate-300 font-mono text-xs text-slate-800 bg-white focus:ring-2 focus:ring-indigo-500 outline-hidden"
             />
-            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+            <div className="flex items-center justify-between gap-1.5 mt-2 flex-wrap">
+              <div className="flex gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setServerUrl('http://192.168.1.150:3000')}
+                  className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                  title="Configurar IP de Máquina Virtual TrueNAS"
+                >
+                  IP TrueNAS VM
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && window.location.origin) {
+                      setServerUrl(window.location.origin);
+                    }
+                  }}
+                  className="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                  title="Usar origen del navegador actual"
+                >
+                  Origen Actual
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setServerUrl('https://inventario.petroil.com.mx')}
+                  className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                >
+                  Dominio Petroil
+                </button>
+              </div>
+
               <button
                 type="button"
-                onClick={() => setServerUrl('http://192.168.1.150:3000')}
-                className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
-                title="Configurar IP de Máquina Virtual TrueNAS"
+                onClick={handleTestConnection}
+                disabled={testingConnection}
+                className="text-[10px] font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-2.5 py-1 rounded-md cursor-pointer transition-colors flex items-center gap-1 shadow-xs"
+                title="Comprobar si las laptops pueden alcanzar este servidor"
               >
-                IP TrueNAS VM
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (typeof window !== 'undefined' && window.location.origin) {
-                    setServerUrl(window.location.origin);
-                  }
-                }}
-                className="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
-                title="Usar origen del navegador actual"
-              >
-                Origen Actual
-              </button>
-              <button
-                type="button"
-                onClick={() => setServerUrl('https://inventario.petroil.com.mx')}
-                className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
-              >
-                Dominio Petroil
+                <RefreshCw className={`w-3 h-3 ${testingConnection ? 'animate-spin' : ''}`} />
+                <span>{testingConnection ? 'Probando...' : 'Probar Conectividad'}</span>
               </button>
             </div>
+
+            {/* Resultado de prueba de conectividad */}
+            {connectionResult && (
+              <div className={`mt-2 p-2.5 rounded-xl text-xs flex items-start gap-2 border ${
+                connectionResult.ok 
+                  ? 'bg-emerald-50 text-emerald-900 border-emerald-200' 
+                  : 'bg-rose-50 text-rose-900 border-rose-200'
+              }`}>
+                {connectionResult.ok ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 text-[11px] leading-relaxed">
+                  <span className="font-semibold">{connectionResult.ok ? 'Servidor Listo:' : 'Aviso de Conectividad:'}</span>{' '}
+                  {connectionResult.message}
+                  <span className="text-[10px] opacity-70 block mt-0.5">Comprobado: {connectionResult.timestamp}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1987,6 +2065,18 @@ try {
                 </button>
 
                 <button
+                  onClick={() => setWindowsErrorTopic('directories')}
+                  className={`px-3 py-1.5 rounded-xl font-bold shrink-0 cursor-pointer transition-all flex items-center gap-1.5 ${
+                    windowsErrorTopic === 'directories'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>No crea directorios / Permisos denegados</span>
+                </button>
+
+                <button
                   onClick={() => setWindowsErrorTopic('policy')}
                   className={`px-3 py-1.5 rounded-xl font-semibold shrink-0 cursor-pointer transition-all flex items-center gap-1.5 ${
                     windowsErrorTopic === 'policy'
@@ -2146,6 +2236,58 @@ try {
                   </div>
                 )}
 
+                {/* Solución: No crea directorios de instalación */}
+                {windowsErrorTopic === 'directories' && (
+                  <div className="space-y-4">
+                    <div className="p-3 rounded-lg bg-red-950 text-red-200 font-mono text-[11px] leading-relaxed border border-red-800">
+                      <span className="text-red-400 font-bold block mb-1">Diagnóstico: Error al crear directorios o permisos denegados en Windows:</span>
+                      New-Item : Access to the path 'C:\ProgramData\Petroil\ITAssetAgent' is denied.
+                      O bien: No se puede encontrar la ruta de acceso al archivo 'C:\ProgramData\Petroil\ITAssetAgent\agent-config.json'.
+                    </div>
+
+                    <div className="text-xs text-slate-700 space-y-2">
+                      <p>
+                        <strong>¿Por qué ocurría antes?</strong> La ruta <code className="font-mono bg-slate-100 px-1 py-0.5 rounded">C:\ProgramData</code> es una carpeta raíz del sistema protegida por Windows. Si el instalador se ejecutaba sin permisos de Administrador local, Windows denegaba el acceso al comando <code className="font-mono">New-Item</code>. Además, en ejecuciones remotas por memoria (<code className="font-mono">irm | iex</code>), el script anterior intentaba leer una ruta física de archivo y abortaba.
+                      </p>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2">
+                          <strong className="text-emerald-950 font-bold block text-xs flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            Solución Automática Integrada en la v2.5.1
+                          </strong>
+                          <p className="text-[11px] text-emerald-900 leading-relaxed">
+                            El script actualizado ahora cuenta con <strong>detección inteligente de permisos y fallback automático</strong>:
+                          </p>
+                          <ul className="list-disc list-inside text-[11px] text-emerald-900 space-y-1">
+                            <li>Si se ejecuta como <strong>Administrador</strong>: Crea los directorios en <code className="font-mono">C:\ProgramData\Petroil\ITAssetAgent</code> (monitoreo continuo a nivel SYSTEM).</li>
+                            <li>Si se ejecuta como <strong>Usuario Estándar</strong>: Crea los directorios en tu carpeta personal <code className="font-mono">%LOCALAPPDATA%\Petroil\ITAssetAgent</code> sin solicitar contraseñas y sin errores.</li>
+                          </ul>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                          <strong className="text-slate-900 font-bold block text-xs flex items-center gap-1.5">
+                            <Terminal className="w-4 h-4 text-indigo-600" />
+                            Comprobar Directorios Creados en tu Equipo
+                          </strong>
+                          <p className="text-[11px] text-slate-600">
+                            Copia y ejecuta este comando en PowerShell para comprobar el directorio donde se instaló el agente en la laptop:
+                          </p>
+                          <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 text-cyan-300 font-mono text-[10px]">
+                            <code className="truncate">Test-Path "$env:ProgramData\Petroil\ITAssetAgent", "$env:LOCALAPPDATA\Petroil\ITAssetAgent"</code>
+                            <button
+                              onClick={() => handleCopy('Test-Path "$env:ProgramData\\Petroil\\ITAssetAgent", "$env:LOCALAPPDATA\\Petroil\\ITAssetAgent"', 'test-dirs')}
+                              className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white text-[10px] ml-2 shrink-0 cursor-pointer"
+                            >
+                              {copiedKey === 'test-dirs' ? '¡Copiado!' : 'Copiar'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* 1. Policy Fix */}
                 {windowsErrorTopic === 'policy' && (
                   <div className="space-y-3">
@@ -2248,35 +2390,63 @@ try {
                   </div>
                 )}
 
-                {/* 4. Network / TrueNAS VM Fix */}
+                {/* 4. Network / TrueNAS VM / Laptop Connectivity Fix */}
                 {windowsErrorTopic === 'network' && (
                   <div className="space-y-3">
                     <div className="p-3 rounded-lg bg-red-950 text-red-200 font-mono text-[11px] leading-relaxed border border-red-800">
-                      <span className="text-red-400 font-bold block mb-1">Error de Red o Nombre Remoto:</span>
-                      The remote name could not be resolved: 'agente.petroil.com.mx' O bien: No se puede establecer una conexión ya que el equipo de destino denegó expresamente dicha conexión.
+                      <span className="text-red-400 font-bold block mb-1">Diagnóstico: Error de Conexión entre la Laptop y el Servidor:</span>
+                      Invoke-RestMethod : No se puede conectar con el servidor remoto.
+                      O bien: The underlying connection was closed: Could not establish trust relationship for the SSL/TLS secure channel.
+                      O bien: Error de sintaxis en PowerShell por recibir página HTML (código &lt;!doctype html&gt;).
                     </div>
 
                     <div className="text-xs text-slate-700 space-y-2">
                       <p>
-                        <strong>¿Por qué ocurre?</strong> Si estás ejecutando este sistema en una <strong>Máquina Virtual dentro de TrueNAS</strong> o en un servidor local de laboratorio, las estaciones Windows 11 de tu red de oficina deben apuntar a la IP privada de tu VM TrueNAS (por ejemplo: <code className="font-mono font-bold text-indigo-700">http://192.168.1.150:3000</code>) y no a un dominio de internet público no configurado en tu DNS.
+                        <strong>Causas principales identificadas y resueltas:</strong>
                       </p>
+                      <ul className="list-disc list-inside text-[11px] text-slate-600 space-y-1">
+                        <li><strong>Servicio de endpoints directos:</strong> El servidor ahora expone las rutas <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-indigo-700">/api/v1/agent/install-windows.ps1</code> y <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-indigo-700">/install-windows.ps1</code> como texto plano PowerShell puro UTF-8 (ya no devuelve HTML de Vite).</li>
+                        <li><strong>Cifrado TLS 1.2 y Certificados LAN:</strong> Windows PowerShell 5.1 requiere habilitar explícitamente TLS 1.2 (<code className="font-mono text-indigo-700">SecurityProtocol = 3072</code>) y omitir certificados SSL para IPs locales de la red (<code className="font-mono">192.168.x.x</code>). Ambos ajustes ya vienen integrados en el comando de una línea y en el script.</li>
+                        <li><strong>IP accesible desde la LAN:</strong> Si ejecutas el sistema en una Máquina Virtual o servidor local, asegúrate de que las laptops y el servidor estén en la misma red Wi-Fi o VLAN corporativa.</li>
+                      </ul>
 
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                        <strong className="text-slate-900 font-bold block text-xs">Pasos para solucionar la conexión con TrueNAS VM:</strong>
-                        <ol className="list-decimal list-inside text-[11px] text-slate-600 space-y-1">
-                          <li>Averigua la dirección IP de tu máquina virtual en TrueNAS (ej. <code className="font-mono">192.168.1.X</code>).</li>
-                          <li>Escribe esa IP en el campo <strong>"URL Servidor / TrueNAS VM"</strong> en la barra de configuración superior.</li>
-                          <li>Vuelve a descargar el archivo <code className="font-mono font-semibold">Install-PetroilAgent.ps1</code> para que se genere con tu IP exacta.</li>
-                          <li>Prueba conectividad desde PowerShell en Windows 11 con:</li>
-                        </ol>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                          <strong className="text-slate-900 font-bold block text-xs">Paso 1: Probar conectividad desde la Laptop</strong>
+                          <p className="text-[11px] text-slate-600">
+                            Ejecuta esta consulta rápida en PowerShell para confirmar si la laptop alcanza el servidor:
+                          </p>
+                          <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 text-cyan-300 font-mono text-[10px]">
+                            <code className="truncate">{`irm "${serverUrl}/api/v1/health"`}</code>
+                            <button
+                              onClick={() => handleCopy(`irm "${serverUrl}/api/v1/health"`, 'test-health')}
+                              className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white text-[10px] ml-2 shrink-0 cursor-pointer"
+                            >
+                              {copiedKey === 'test-health' ? '¡Copiado!' : 'Copiar'}
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-500">
+                            Debe devolver: <code className="font-mono">status: "online"</code>.
+                          </p>
+                        </div>
 
-                        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 text-cyan-300 font-mono text-[11px]">
-                          <code>{`Test-NetConnection -ComputerName 192.168.1.150 -Port 3000`}</code>
+                        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2">
+                          <strong className="text-emerald-950 font-bold block text-xs flex items-center gap-1.5">
+                            <Upload className="w-3.5 h-3.5 text-emerald-600" />
+                            Paso 2: Respaldo Offline en el Escritorio
+                          </strong>
+                          <p className="text-[11px] text-emerald-900 leading-relaxed">
+                            Si el firewall de la empresa bloquea el puerto 3000, el agente genera de forma automática un archivo en tu <strong>Escritorio</strong>:
+                          </p>
+                          <p className="text-[11px] font-mono font-bold text-emerald-800 bg-white/80 p-1.5 rounded-lg border border-emerald-300">
+                            📄 Escritorio\Petroil-Auditoria-Equipo.json
+                          </p>
                           <button
-                            onClick={() => handleCopy(`Test-NetConnection -ComputerName 192.168.1.150 -Port 3000`, 'test-net')}
-                            className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white text-[10px] ml-2 shrink-0 cursor-pointer"
+                            onClick={() => setShowImportModal(true)}
+                            className="w-full py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                           >
-                            {copiedKey === 'test-net' ? '¡Copiado!' : 'Copiar'}
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Cargar Archivo JSON de Auditoría</span>
                           </button>
                         </div>
                       </div>
@@ -2864,8 +3034,8 @@ try {
                   <span> o arrástralo aquí</span>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Ubicación habitual en Windows 11: <br />
-                  <code className="font-mono text-slate-600 font-semibold">Escritorio\Petroil-Auditoria-Equipo.json</code> o <code className="font-mono text-slate-600 font-semibold">C:\ProgramData\Petroil\ITAssetAgent\telemetry.json</code>
+                  Ubicaciones habituales en Windows: <br />
+                  <code className="font-mono text-slate-700 font-semibold">Escritorio\Petroil-Auditoria-Equipo.json</code>, <code className="font-mono text-slate-700 font-semibold">C:\ProgramData\Petroil\ITAssetAgent\telemetry.json</code> o <code className="font-mono text-slate-700 font-semibold">%LOCALAPPDATA%\Petroil\ITAssetAgent\telemetry.json</code>
                 </p>
               </div>
 

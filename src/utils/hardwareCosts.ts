@@ -98,6 +98,14 @@ export const OFFICIAL_HARDWARE_PRICES: HardwarePriceRule[] = [
     cost: 8000,
     currency: 'MXN',
     description: 'Computadoras de escritorio / PCs fijas'
+  },
+  {
+    id: 'price-servidores',
+    label: 'Servidores',
+    category: 'servidor',
+    cost: 70000,
+    currency: 'MXN',
+    description: 'Servidores de rack / torre y centros de datos'
   }
 ];
 
@@ -128,6 +136,11 @@ export function getOfficialCost(
   // 3. Escritorio: $8,000 MXN
   if (cat === 'desktop') {
     return 8000;
+  }
+
+  // 4. Servidores: $70,000 MXN
+  if (cat === 'servidor' || cat === 'server') {
+    return 70000;
   }
 
   // 4. Laptops

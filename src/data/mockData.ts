@@ -407,7 +407,7 @@ export const INITIAL_ASSETS: HardwareAsset[] = [
     assignedToEmployeeId: 'emp-1',
     assignedDate: '2024-03-01',
     purchaseDate: '2024-02-15',
-    purchaseCost: 165000,
+    purchaseCost: 70000,
     currency: 'MXN',
     supplier: 'Dell Technologies Enterprise',
     invoiceNumber: 'DELL-ENT-41009',
