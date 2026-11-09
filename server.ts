@@ -396,7 +396,7 @@ const serveWindowsInstaller: express.RequestHandler = (req, res) => {
 
   const psScript = `# ==============================================================================
 # Script de Instalacion Automatica Agente Petroil ITAsset
-# Compatible con Windows 11 (21H2, 22H2, 23H2, 24H2) y Windows 10 (Build 19041+)
+# Compatible con Windows 11 (24H2, 23H2, 22H2, 21H2) y Windows 10 (Build 19041+)
 # Base de Datos: Google Cloud Firestore (ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e)
 # Servidor Central: ${serverUrl}
 # ==============================================================================
@@ -406,11 +406,16 @@ try {
     [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 } catch {}
 
+$OutputEncoding = [System.Text.Encoding]::UTF8
+try {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+} catch {}
+
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host "    INSTALADOR AGENTE PETROIL ITASSET (WINDOWS 11 / 10)" -ForegroundColor Cyan
 Write-Host "==================================================================" -ForegroundColor Cyan
 
-# 1. VERIFICACION DE PRIVILEGIOS
+# 1. VERIFICACION DE PRIVILEGIOS Y DETERMINACION DE RUTA
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if ($isAdmin) {
     Write-Host "[+] Permisos: Administrador detectado." -ForegroundColor Green
@@ -451,7 +456,7 @@ $config = @{
     EmployeeName          = "${employeeName}"
     FirestoreProjectId    = "gen-lang-client-0946159343"
     FirestoreDatabaseId   = "ai-studio-sistemadeinventa-0e46c147-3f92-4470-b2fa-9d23678b1f3e"
-    AgentVersion          = "2.5.1-Enterprise"
+    AgentVersion          = "2.5.2-Enterprise"
     Platform              = "windows"
     InstalledAt           = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 }
@@ -460,17 +465,34 @@ Write-Host "[+] Configuracion guardada en: $configPath" -ForegroundColor Gray
 
 # 4. SCRIPT RECOPILADOR PERMANENTE (PetroilCollector.ps1)
 $collectorScript = @'
-$configPath = "$installDir\\agent-config.json"
-if (-not (Test-Path $configPath)) {
-    $configPath = "$env:ProgramData\\Petroil\\ITAssetAgent\\agent-config.json"
-    if (-not (Test-Path $configPath)) {
-        $configPath = "$env:LOCALAPPDATA\\Petroil\\ITAssetAgent\\agent-config.json"
-    }
+# ==============================================================================
+# Petroil ITAsset - Script Recopilador de Telemetria
+# ==============================================================================
+$installDir = if ($env:ProgramData -and (Test-Path "$env:ProgramData\Petroil\ITAssetAgent\agent-config.json")) {
+    "$env:ProgramData\Petroil\ITAssetAgent"
+} elseif ($env:LOCALAPPDATA -and (Test-Path "$env:LOCALAPPDATA\Petroil\ITAssetAgent\agent-config.json")) {
+    "$env:LOCALAPPDATA\Petroil\ITAssetAgent"
+} elseif ($PSScriptRoot -and (Test-Path "$PSScriptRoot\agent-config.json")) {
+    "$PSScriptRoot"
+} else {
+    "$env:LOCALAPPDATA\Petroil\ITAssetAgent"
 }
 
-$cfg = if (Test-Path $configPath) { Get-Content $configPath | ConvertFrom-Json } else { @{ ServerUrl = "${serverUrl}/api/v1/telemetry" } }
-$logFile = "$installDir\\logs\\telemetry.log"
+$configPath = "$installDir\agent-config.json"
+$logsDir = "$installDir\logs"
+if (-not (Test-Path $logsDir)) {
+    New-Item -ItemType Directory -Force -Path $logsDir -ErrorAction SilentlyContinue | Out-Null
+}
+$logFile = "$logsDir\telemetry.log"
+$telemetryFile = "$installDir\telemetry.json"
 
+$cfg = if (Test-Path $configPath) {
+    Get-Content $configPath -Encoding UTF8 | ConvertFrom-Json
+} else {
+    [PSCustomObject]@{ ServerUrl = "${serverUrl}/api/v1/telemetry"; BranchId = "branch-1"; BranchName = "Central" }
+}
+
+# Informacion de Hardware
 $cs = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
 $bios = Get-CimInstance Win32_Bios -ErrorAction SilentlyContinue
 $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
@@ -497,6 +519,7 @@ $serial = if ($bios.SerialNumber -and $bios.SerialNumber -ne "None" -and $bios.S
     "SN-$($cs.Name)" 
 }
 
+# BitLocker con proteccion para Windows 11 Home / Pro / Enterprise
 $blStatus = @{
     drive            = "C:"
     protectionStatus = "Desprotegido"
@@ -508,23 +531,25 @@ $blStatus = @{
 }
 
 try {
-    $blVol = Get-BitLockerVolume -MountPoint "C:" -ErrorAction SilentlyContinue
-    if ($blVol) {
-        $blStatus.protectionStatus = if ($blVol.ProtectionStatus -eq 'On') { "Protegido" } else { "Desprotegido" }
-        if ($blVol.EncryptionMethod) { $blStatus.encryptionMethod = "$($blVol.EncryptionMethod)" }
-        $recProtector = $blVol.KeyProtector | Where-Object { $_.KeyProtectorType -eq 'RecoveryPassword' } | Select-Object -First 1
-        if ($recProtector -and $recProtector.RecoveryPassword) {
-            $blStatus.recoveryKey = $recProtector.RecoveryPassword
-            $blStatus.recoveryKeyId = $recProtector.KeyProtectorId
+    if (Get-Command Get-BitLockerVolume -ErrorAction SilentlyContinue) {
+        $blVol = Get-BitLockerVolume -MountPoint "C:" -ErrorAction SilentlyContinue
+        if ($blVol) {
+            $blStatus.protectionStatus = if ($blVol.ProtectionStatus -eq 'On') { "Protegido" } else { "Desprotegido" }
+            if ($blVol.EncryptionMethod) { $blStatus.encryptionMethod = "$($blVol.EncryptionMethod)" }
+            $recProtector = $blVol.KeyProtector | Where-Object { $_.KeyProtectorType -eq 'RecoveryPassword' } | Select-Object -First 1
+            if ($recProtector -and $recProtector.RecoveryPassword) {
+                $blStatus.recoveryKey = $recProtector.RecoveryPassword
+                $blStatus.recoveryKeyId = $recProtector.KeyProtectorId
+            }
+            $tpmProtector = $blVol.KeyProtector | Where-Object { $_.KeyProtectorType -match 'Tpm' }
+            $blStatus.tpmPresent = ($tpmProtector -ne $null -and $tpmProtector.Count -gt 0)
         }
-        $tpmProtector = $blVol.KeyProtector | Where-Object { $_.KeyProtectorType -match 'Tpm' }
-        $blStatus.tpmPresent = ($tpmProtector -ne $null -and $tpmProtector.Count -gt 0)
     }
 } catch {}
 
 $loggedUser = $env:USERNAME
 $userDomain = $env:USERDOMAIN
-$fullUser = if ($userDomain) { "$userDomain\\$loggedUser" } else { $loggedUser }
+$fullUser = if ($userDomain) { "$userDomain\$loggedUser" } else { $loggedUser }
 
 $payload = @{
     hostname            = $env:COMPUTERNAME
@@ -550,13 +575,14 @@ $payload = @{
 }
 
 $jsonBody = $payload | ConvertTo-Json -Depth 4
-$telemetryFile = "$installDir\\telemetry.json"
 $jsonBody | Set-Content -Path $telemetryFile -Encoding UTF8
 
+$desktopAuditPath = ""
 try {
     $desktopPath = [Environment]::GetFolderPath("Desktop")
     if ($desktopPath -and (Test-Path $desktopPath)) {
-        $jsonBody | Set-Content -Path "$desktopPath\\Petroil-Auditoria-Equipo.json" -Encoding UTF8
+        $desktopAuditPath = "$desktopPath\Petroil-Auditoria-Equipo.json"
+        $jsonBody | Set-Content -Path $desktopAuditPath -Encoding UTF8
     }
 } catch {}
 
@@ -566,15 +592,17 @@ try {
     try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true} } catch {}
 
     $resp = Invoke-RestMethod -Uri $cfg.ServerUrl -Method Post -Body $jsonBody -ContentType "application/json; charset=utf-8" -TimeoutSec 15 -ErrorAction Stop
-    Write-Host "[OK] ¡CONEXION EXITOSA! Telemetria recibida y registrada en el servidor." -ForegroundColor Green
+    Write-Host "[OK] CONEXION EXITOSA. Telemetria recibida y registrada en el servidor." -ForegroundColor Green
     Write-Host "     Equipo registrado: $env:COMPUTERNAME ($serial)" -ForegroundColor Green
-    Add-Content -Path $logFile -Value "[$(Get-Date)] Envio exitoso: $($cfg.ServerUrl)"
+    Add-Content -Path $logFile -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [EXITO] Envio exitoso: $($cfg.ServerUrl) | Host: $env:COMPUTERNAME | IP: $ipAddr"
 } catch {
-    Write-Host "[-] Aviso de Conexion: $($_.Exception.Message)" -ForegroundColor Yellow
+    $errMsg = $_.Exception.Message
+    Write-Host "[-] Aviso de Conexion: $errMsg" -ForegroundColor Yellow
     Write-Host "    Informacion guardada localmente en:" -ForegroundColor White
     Write-Host "    1. $telemetryFile" -ForegroundColor Cyan
-    Write-Host "    2. Escritorio: Petroil-Auditoria-Equipo.json" -ForegroundColor Cyan
-    Add-Content -Path $logFile -Value "[$(Get-Date)] Error de conexion: $($_.Exception.Message)"
+    if ($desktopAuditPath) { Write-Host "    2. Escritorio: $desktopAuditPath" -ForegroundColor Cyan }
+    Write-Host "    3. Registro de errores: $logFile" -ForegroundColor Cyan
+    Add-Content -Path $logFile -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [ERROR_CONEXION] Servidor: $($cfg.ServerUrl) | Detalle: $errMsg"
 }
 '@
 
@@ -582,7 +610,438 @@ $collectorPath = "$installDir\\PetroilCollector.ps1"
 $collectorScript | Set-Content -Path $collectorPath -Encoding UTF8
 Write-Host "[+] Script recopilador 'PetroilCollector.ps1' creado en $installDir" -ForegroundColor Green
 
-# 5. REGISTRO DE TAREA AUTOMATICA O INICIO
+# 5. AGENTE RESIDENTE EN BARRA DE TAREAS (System Tray NotifyIcon junto al reloj)
+$trayScript = @'
+# ==============================================================================
+# Petroil ITAsset - Agente de Barra de Tareas (System Tray NotifyIcon)
+# Muestra estado de conexion, telemetria y diagnostico de errores junto al reloj
+# ==============================================================================
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# Evitar multiples instancias
+$mutexName = "PetroilITAssetTrayAgentMutex"
+$createdNew = $false
+$mutex = New-Object System.Threading.Mutex($true, $mutexName, [ref]$createdNew)
+if (-not $createdNew) {
+    Exit
+}
+
+$installDir = if ($env:ProgramData -and (Test-Path "$env:ProgramData\Petroil\ITAssetAgent\agent-config.json")) {
+    "$env:ProgramData\Petroil\ITAssetAgent"
+} elseif ($env:LOCALAPPDATA -and (Test-Path "$env:LOCALAPPDATA\Petroil\ITAssetAgent\agent-config.json")) {
+    "$env:LOCALAPPDATA\Petroil\ITAssetAgent"
+} elseif ($PSScriptRoot -and (Test-Path "$PSScriptRoot\agent-config.json")) {
+    "$PSScriptRoot"
+} else {
+    "$env:LOCALAPPDATA\Petroil\ITAssetAgent"
+}
+
+$configPath = "$installDir\agent-config.json"
+$logFile = "$installDir\logs\telemetry.log"
+$telemetryFile = "$installDir\telemetry.json"
+$collectorPath = "$installDir\PetroilCollector.ps1"
+$desktopPath = [Environment]::GetFolderPath("Desktop")
+$desktopAuditFile = if ($desktopPath) { "$desktopPath\Petroil-Auditoria-Equipo.json" } else { "" }
+
+function Get-AgentConfig {
+    if (Test-Path $configPath) {
+        try { return (Get-Content $configPath -Encoding UTF8 | ConvertFrom-Json) } catch {}
+    }
+    return [PSCustomObject]@{ ServerUrl = "${serverUrl}/api/v1/telemetry"; BranchName = "Central" }
+}
+
+function Test-ServerConnection {
+    param([string]$url)
+    try {
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
+        try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true} } catch {}
+        $healthUrl = $url -replace '/api/v1/telemetry', '/api/v1/health'
+        $response = Invoke-WebRequest -Uri $healthUrl -Method Get -TimeoutSec 4 -UseBasicParsing -ErrorAction Stop
+        return @{ Success = $true; Status = "$($response.StatusCode) OK"; Latency = "Activo" }
+    } catch {
+        return @{ Success = $false; Status = "Fallo de conexion"; Error = $_.Exception.Message }
+    }
+}
+
+function Create-TrayIconBitmap([bool]$connected) {
+    try {
+        $bmp = New-Object System.Drawing.Bitmap 16, 16
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+
+        # Fondo circular azul oscuro corporativo Petroil
+        $bgBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(15, 23, 42))
+        $g.FillEllipse($bgBrush, 0, 0, 15, 15)
+
+        # Anillo interno Cyan
+        $innerPen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(6, 182, 212)), 1.5
+        $g.DrawEllipse($innerPen, 2, 2, 11, 11)
+
+        # Indicador de estado: Verde si conectado, Rojo/Ambar si hay error
+        $statusColor = if ($connected) { [System.Drawing.Color]::FromArgb(34, 197, 94) } else { [System.Drawing.Color]::FromArgb(239, 68, 68) }
+        $statusBrush = New-Object System.Drawing.SolidBrush $statusColor
+        $g.FillEllipse($statusBrush, 5, 5, 6, 6)
+
+        $hIcon = $bmp.GetHicon()
+        return [System.Drawing.Icon]::FromHandle($hIcon)
+    } catch {
+        return [System.Drawing.SystemIcons]::Shield
+    }
+}
+
+# Inicializar NotifyIcon
+$notifyIcon = New-Object System.Windows.Forms.NotifyIcon
+$notifyIcon.Icon = Create-TrayIconBitmap -connected $true
+$notifyIcon.Text = "Petroil ITAsset - $env:COMPUTERNAME"
+$notifyIcon.Visible = $true
+
+# Menu Contextual
+$contextMenu = New-Object System.Windows.Forms.ContextMenuStrip
+
+$itemHeader = $contextMenu.Items.Add("Petroil ITAsset Agent v2.5.2")
+$itemHeader.Enabled = $false
+$itemHeader.Font = New-Object System.Drawing.Font($contextMenu.Font, [System.Drawing.FontStyle]::Bold)
+
+$contextMenu.Items.Add("-") | Out-Null
+
+$itemTelemetry = $contextMenu.Items.Add("Ver Telemetria y Estado de Conexion")
+$itemTelemetry.Font = New-Object System.Drawing.Font($contextMenu.Font, [System.Drawing.FontStyle]::Bold)
+$itemTelemetry.Add_Click({ Show-TelemetryDialog })
+
+$itemDiagnostics = $contextMenu.Items.Add("Diagnostico de Errores y Rutas de Archivos")
+$itemDiagnostics.Add_Click({ Show-DiagnosticsDialog })
+
+$itemSyncNow = $contextMenu.Items.Add("Forzar Sincronizacion Ahora")
+$itemSyncNow.Add_Click({
+    $notifyIcon.ShowBalloonTip(3000, "Petroil ITAsset", "Recopilando y enviando telemetria al servidor...", [System.Windows.Forms.ToolTipIcon]::Info)
+    if (Test-Path $collectorPath) {
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$collectorPath\`"" -WindowStyle Hidden
+    }
+    Start-Sleep -Seconds 3
+    Refresh-Status
+})
+
+$contextMenu.Items.Add("-") | Out-Null
+
+$itemOpenLogs = $contextMenu.Items.Add("Abrir Carpeta de Logs ($installDir\logs)")
+$itemOpenLogs.Add_Click({
+    $logsFolder = "$installDir\logs"
+    if (-not (Test-Path $logsFolder)) { New-Item -ItemType Directory -Force -Path $logsFolder | Out-Null }
+    [System.Diagnostics.Process]::Start("explorer.exe", $logsFolder)
+})
+
+$itemOpenDesktop = $contextMenu.Items.Add("Abrir Archivo de Auditoria (Escritorio)")
+$itemOpenDesktop.Add_Click({
+    if ($desktopAuditFile -and (Test-Path $desktopAuditFile)) {
+        [System.Diagnostics.Process]::Start("notepad.exe", $desktopAuditFile)
+    } elseif (Test-Path $telemetryFile) {
+        [System.Diagnostics.Process]::Start("notepad.exe", $telemetryFile)
+    } else {
+        [System.Windows.Forms.MessageBox]::Show("Aun no se genera el archivo de auditoria. Seleccione 'Forzar Sincronizacion Ahora'.", "Petroil ITAsset", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    }
+})
+
+$itemTestConn = $contextMenu.Items.Add("Probar Conexion con Servidor Central")
+$itemTestConn.Add_Click({
+    $cfg = Get-AgentConfig
+    $test = Test-ServerConnection -url $cfg.ServerUrl
+    if ($test.Success) {
+        [System.Windows.Forms.MessageBox]::Show("Conexion Exitosa con el Servidor Central Petroil.`n`nURL: $($cfg.ServerUrl)`nRespuesta: $($test.Status)`nEstado: En linea y sincronizado.", "Petroil ITAsset - Conexion Exitosa", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    } else {
+        [System.Windows.Forms.MessageBox]::Show("No se pudo conectar con el servidor central.`n`nURL: $($cfg.ServerUrl)`nError: $($test.Error)`n`nRevise el archivo de log en:`n$logFile", "Petroil ITAsset - Error de Conexion", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    }
+})
+
+$contextMenu.Items.Add("-") | Out-Null
+
+$itemExit = $contextMenu.Items.Add("Cerrar Agente de Barra de Tareas")
+$itemExit.Add_Click({
+    $notifyIcon.Visible = $false
+    $notifyIcon.Dispose()
+    [System.Windows.Forms.Application]::Exit()
+})
+
+$notifyIcon.ContextMenuStrip = $contextMenu
+$notifyIcon.Add_DoubleClick({ Show-TelemetryDialog })
+
+function Refresh-Status {
+    $cfg = Get-AgentConfig
+    $test = Test-ServerConnection -url $cfg.ServerUrl
+    $notifyIcon.Icon = Create-TrayIconBitmap -connected $test.Success
+    $statusText = if ($test.Success) { "Conectado" } else { "Error Conexion" }
+    $tooltip = "Petroil ITAsset | $env:COMPUTERNAME | $statusText"
+    if ($tooltip.Length -gt 63) { $tooltip = $tooltip.Substring(0, 63) }
+    $notifyIcon.Text = $tooltip
+}
+
+# Dialogo Principal de Telemetria y Conexion
+function Show-TelemetryDialog {
+    $cfg = Get-AgentConfig
+    $test = Test-ServerConnection -url $cfg.ServerUrl
+    
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = "Petroil ITAsset - Telemetria y Estado de Conexion"
+    $form.Size = New-Object System.Drawing.Size(680, 650)
+    $form.StartPosition = "CenterScreen"
+    $form.FormBorderStyle = "FixedDialog"
+    $form.MaximizeBox = $false
+    $form.BackColor = [System.Drawing.Color]::FromArgb(248, 250, 252)
+    $form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+
+    # Banner Superior
+    $banner = New-Object System.Windows.Forms.Panel
+    $banner.Dock = "Top"
+    $banner.Height = 75
+    $banner.BackColor = [System.Drawing.Color]::FromArgb(15, 23, 42)
+    $form.Controls.Add($banner)
+
+    $lblTitle = New-Object System.Windows.Forms.Label
+    $lblTitle.Text = "PETROIL IT ASSET MANAGEMENT"
+    $lblTitle.ForeColor = [System.Drawing.Color]::White
+    $lblTitle.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $lblTitle.Location = New-Object System.Drawing.Point(20, 15)
+    $lblTitle.AutoSize = $true
+    $banner.Controls.Add($lblTitle)
+
+    $lblSub = New-Object System.Windows.Forms.Label
+    $lblSub.Text = "Agente de Telemetria en Tiempo Real | Sede: $($cfg.BranchName)"
+    $lblSub.ForeColor = [System.Drawing.Color]::FromArgb(148, 163, 184)
+    $lblSub.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+    $lblSub.Location = New-Object System.Drawing.Point(20, 42)
+    $lblSub.AutoSize = $true
+    $banner.Controls.Add($lblSub)
+
+    # Estado de Conexion Banner
+    $pnlStatus = New-Object System.Windows.Forms.Panel
+    $pnlStatus.Location = New-Object System.Drawing.Point(20, 90)
+    $pnlStatus.Size = New-Object System.Drawing.Size(625, 45)
+    if ($test.Success) {
+        $pnlStatus.BackColor = [System.Drawing.Color]::FromArgb(220, 252, 231)
+    } else {
+        $pnlStatus.BackColor = [System.Drawing.Color]::FromArgb(254, 226, 226)
+    }
+    $form.Controls.Add($pnlStatus)
+
+    $lblConnStatus = New-Object System.Windows.Forms.Label
+    $lblConnStatus.Location = New-Object System.Drawing.Point(15, 12)
+    $lblConnStatus.AutoSize = $true
+    $lblConnStatus.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
+    if ($test.Success) {
+        $lblConnStatus.ForeColor = [System.Drawing.Color]::FromArgb(22, 101, 52)
+        $lblConnStatus.Text = "● CONEXION ACTIVA AL SERVIDOR CENTRAL (HTTP 200 OK)"
+    } else {
+        $lblConnStatus.ForeColor = [System.Drawing.Color]::FromArgb(153, 27, 27)
+        $lblConnStatus.Text = "● ERROR DE CONEXION CON EL SERVIDOR CENTRAL"
+    }
+    $pnlStatus.Controls.Add($lblConnStatus)
+
+    # Datos de Hardware
+    $grpDevice = New-Object System.Windows.Forms.GroupBox
+    $grpDevice.Text = " Datos del Equipo y Telemetria Local "
+    $grpDevice.Location = New-Object System.Drawing.Point(20, 145)
+    $grpDevice.Size = New-Object System.Drawing.Size(625, 150)
+    $form.Controls.Add($grpDevice)
+
+    $telemetryData = if (Test-Path $telemetryFile) {
+        try { Get-Content $telemetryFile -Encoding UTF8 | ConvertFrom-Json } catch { $null }
+    } else { $null }
+
+    $hostVal = if ($telemetryData) { $telemetryData.hostname } else { $env:COMPUTERNAME }
+    $serialVal = if ($telemetryData) { $telemetryData.serialNumber } else { "Consultando..." }
+    $ipVal = if ($telemetryData) { $telemetryData.ipAddress } else { "127.0.0.1" }
+    $osVal = if ($telemetryData) { $telemetryData.os } else { (Get-CimInstance Win32_OperatingSystem).Caption }
+    $cpuVal = if ($telemetryData) { $telemetryData.cpu } else { (Get-CimInstance Win32_Processor | Select-Object -First 1).Name }
+    $ramVal = if ($telemetryData) { $telemetryData.ram } else { "8 GB" }
+
+    $labels = @(
+        @{ Text = "Equipo (Host):"; Val = $hostVal; X = 15; Y = 25 },
+        @{ Text = "Numero de Serie:"; Val = $serialVal; X = 320; Y = 25 },
+        @{ Text = "Direccion IP:"; Val = $ipVal; X = 15; Y = 55 },
+        @{ Text = "Memoria RAM:"; Val = $ramVal; X = 320; Y = 55 },
+        @{ Text = "Sistema Operativo:"; Val = $osVal; X = 15; Y = 85 },
+        @{ Text = "Procesador (CPU):"; Val = $cpuVal; X = 15; Y = 115 }
+    )
+
+    foreach ($item in $labels) {
+        $lbl = New-Object System.Windows.Forms.Label
+        $lbl.Text = $item.Text
+        $lbl.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+        $lbl.Location = New-Object System.Drawing.Point($item.X, $item.Y)
+        $lbl.AutoSize = $true
+        $grpDevice.Controls.Add($lbl)
+
+        $val = New-Object System.Windows.Forms.Label
+        $val.Text = [string]$item.Val
+        $val.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+        $val.ForeColor = [System.Drawing.Color]::FromArgb(51, 65, 85)
+        $val.Location = New-Object System.Drawing.Point(($item.X + 130), $item.Y)
+        $val.Size = New-Object System.Drawing.Size(170, 20)
+        $val.AutoEllipsis = $true
+        $grpDevice.Controls.Add($val)
+    }
+
+    # Diagnostico y Ubicacion de Archivos
+    $grpFiles = New-Object System.Windows.Forms.GroupBox
+    $grpFiles.Text = " Ubicacion Exacta de Archivos del Agente y Logs de Error "
+    $grpFiles.Location = New-Object System.Drawing.Point(20, 305)
+    $grpFiles.Size = New-Object System.Drawing.Size(625, 235)
+    $form.Controls.Add($grpFiles)
+
+    $fileItems = @(
+        @{ Name = "Configuracion:"; Path = $configPath; Action = "Abrir Config" },
+        @{ Name = "Registro Logs / Errores:"; Path = $logFile; Action = "Ver Log" },
+        @{ Name = "Telemetria Local (JSON):"; Path = $telemetryFile; Action = "Ver JSON" },
+        @{ Name = "Respaldo Escritorio:"; Path = $desktopAuditFile; Action = "Abrir Archivo" }
+    )
+
+    $yPos = 25
+    foreach ($fi in $fileItems) {
+        $lblName = New-Object System.Windows.Forms.Label
+        $lblName.Text = $fi.Name
+        $lblName.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+        $lblName.Location = New-Object System.Drawing.Point(15, $yPos)
+        $lblName.AutoSize = $true
+        $grpFiles.Controls.Add($lblName)
+
+        $txtPath = New-Object System.Windows.Forms.TextBox
+        $txtPath.Text = $fi.Path
+        $txtPath.ReadOnly = $true
+        $txtPath.BackColor = [System.Drawing.Color]::White
+        $txtPath.Location = New-Object System.Drawing.Point(180, ($yPos - 2))
+        $txtPath.Size = New-Object System.Drawing.Size(320, 22)
+        $grpFiles.Controls.Add($txtPath)
+
+        $btnAct = New-Object System.Windows.Forms.Button
+        $btnAct.Text = $fi.Action
+        $btnAct.Location = New-Object System.Drawing.Point(510, ($yPos - 3))
+        $btnAct.Size = New-Object System.Drawing.Size(100, 25)
+        $filePathTarget = $fi.Path
+        $btnAct.Add_Click({
+            if ($filePathTarget -and (Test-Path $filePathTarget)) {
+                [System.Diagnostics.Process]::Start("notepad.exe", $filePathTarget)
+            } else {
+                [System.Windows.Forms.MessageBox]::Show("El archivo todavia no existe en la ruta especificada.", "Petroil ITAsset", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            }
+        })
+        $grpFiles.Controls.Add($btnAct)
+
+        $yPos += 35
+    }
+
+    # Ultimos Errores en Log
+    $lblLogSummary = New-Object System.Windows.Forms.Label
+    $lblLogSummary.Text = "Ultimos registros de conexion y errores (telemetry.log):"
+    $lblLogSummary.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+    $lblLogSummary.Location = New-Object System.Drawing.Point(15, 160)
+    $lblLogSummary.AutoSize = $true
+    $grpFiles.Controls.Add($lblLogSummary)
+
+    $txtLog = New-Object System.Windows.Forms.TextBox
+    $txtLog.Multiline = $true
+    $txtLog.ScrollBars = "Vertical"
+    $txtLog.ReadOnly = $true
+    $txtLog.BackColor = [System.Drawing.Color]::FromArgb(241, 245, 249)
+    $txtLog.Font = New-Object System.Drawing.Font("Consolas", 8)
+    $txtLog.Location = New-Object System.Drawing.Point(15, 180)
+    $txtLog.Size = New-Object System.Drawing.Size(595, 45)
+    if (Test-Path $logFile) {
+        try {
+            $lines = Get-Content $logFile -Tail 10
+            $txtLog.Text = ($lines -join [Environment]::NewLine)
+        } catch { $txtLog.Text = "Sin registros." }
+    } else {
+        $txtLog.Text = "El archivo de logs no ha sido generado aun."
+    }
+    $grpFiles.Controls.Add($txtLog)
+
+    # Botones Inferiores
+    $btnSync = New-Object System.Windows.Forms.Button
+    $btnSync.Text = "Forzar Sincronizacion Ahora"
+    $btnSync.Location = New-Object System.Drawing.Point(20, 555)
+    $btnSync.Size = New-Object System.Drawing.Size(200, 35)
+    $btnSync.BackColor = [System.Drawing.Color]::FromArgb(15, 23, 42)
+    $btnSync.ForeColor = [System.Drawing.Color]::White
+    $btnSync.FlatStyle = "Flat"
+    $btnSync.Add_Click({
+        $form.Close()
+        $notifyIcon.ShowBalloonTip(3000, "Petroil ITAsset", "Recopilando telemetria de hardware...", [System.Windows.Forms.ToolTipIcon]::Info)
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$collectorPath\`"" -WindowStyle Hidden
+    })
+    $form.Controls.Add($btnSync)
+
+    $btnOpenDir = New-Object System.Windows.Forms.Button
+    $btnOpenDir.Text = "Abrir Carpeta de Instalacion"
+    $btnOpenDir.Location = New-Object System.Drawing.Point(235, 555)
+    $btnOpenDir.Size = New-Object System.Drawing.Size(200, 35)
+    $btnOpenDir.Add_Click({ [System.Diagnostics.Process]::Start("explorer.exe", $installDir) })
+    $form.Controls.Add($btnOpenDir)
+
+    $btnClose = New-Object System.Windows.Forms.Button
+    $btnClose.Text = "Cerrar"
+    $btnClose.Location = New-Object System.Drawing.Point(545, 555)
+    $btnClose.Size = New-Object System.Drawing.Size(100, 35)
+    $btnClose.Add_Click({ $form.Close() })
+    $form.Controls.Add($btnClose)
+
+    $form.ShowDialog() | Out-Null
+}
+
+function Show-DiagnosticsDialog {
+    Show-TelemetryDialog
+}
+
+# Notificacion emergente inicial
+$notifyIcon.ShowBalloonTip(5000, "Petroil ITAsset Agent", "Agente activo junto al reloj. Haga clic derecho para ver telemetria o diagnostico de errores.", [System.Windows.Forms.ToolTipIcon]::Info)
+
+# Timer para sondeo y actualizacion periodica de estado cada 5 minutos
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 300000
+$timer.Add_Tick({ Refresh-Status })
+$timer.Start()
+
+Refresh-Status
+
+# Bucle principal de la aplicacion de Windows Forms
+[System.Windows.Forms.Application]::Run()
+'@
+
+$trayScriptPath = "$installDir\\PetroilTrayAgent.ps1"
+$trayScript | Set-Content -Path $trayScriptPath -Encoding UTF8
+Write-Host "[+] Agente de barra de tareas 'PetroilTrayAgent.ps1' creado." -ForegroundColor Green
+
+# Desbloquear archivos PowerShell en Windows 11 para eliminar restricciones de SmartScreen
+Get-ChildItem -Path "$installDir" -Filter "*.ps1" -Recurse -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
+
+# 6. CONFIGURACION DE INICIO AUTOMATICO (BARRA DE TAREAS Y RECOPILADOR)
+Write-Host ">>> Configurando persistencia y auto-arranque en Windows..." -ForegroundColor Cyan
+
+# 6.1 Acceso directo en carpeta de Inicio (Startup) para el Agente de Barra de Tareas
+try {
+    $wscript = New-Object -ComObject WScript.Shell
+    $startupPath = [Environment]::GetFolderPath('Startup')
+    if ($startupPath -and (Test-Path $startupPath)) {
+        $trayShortcut = $wscript.CreateShortcut("$startupPath\\PetroilTrayAgent.lnk")
+        $trayShortcut.TargetPath = "powershell.exe"
+        $trayShortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$trayScriptPath\`""
+        $trayShortcut.WorkingDirectory = $installDir
+        $trayShortcut.Description = "Petroil ITAsset - Agente de Barra de Tareas"
+        $trayShortcut.Save()
+        Write-Host "[+] Acceso directo de barra de tareas registrado en Inicio (Startup)." -ForegroundColor Green
+    }
+} catch {
+    Write-Warning "Aviso configurando Startup: $_"
+}
+
+# 6.2 Registro en Clave Run de Registro de Windows (Persistencia asegurada)
+try {
+    $regPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+    $regCmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$trayScriptPath\`""
+    Set-ItemProperty -Path $regPath -Name "PetroilITAssetTray" -Value $regCmd -ErrorAction SilentlyContinue
+    Write-Host "[+] Registro Run de Windows configurado para inicio de sesion." -ForegroundColor Green
+} catch {}
+
+# 6.3 Tarea Programada para Recopilador en Segundo Plano
 $taskOk = $false
 if ($isAdmin) {
     try {
@@ -605,25 +1064,21 @@ if (-not $taskOk) {
         Register-ScheduledTask -TaskName "PetroilITAssetAgent" -Action $action -Trigger $triggerLogon -RunLevel Highest -Force -ErrorAction Stop | Out-Null
         $taskOk = $true
         Write-Host "[+] Tarea programada registrada para inicio de sesion de usuario." -ForegroundColor Green
-    } catch {
-        try {
-            $wscript = New-Object -ComObject WScript.Shell
-            $startupPath = [Environment]::GetFolderPath('Startup')
-            if ($startupPath -and (Test-Path $startupPath)) {
-                $shortcut = $wscript.CreateShortcut("$startupPath\\PetroilAgent.lnk")
-                $shortcut.TargetPath = "PowerShell.exe"
-                $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$collectorPath\`""
-                $shortcut.WorkingDirectory = $installDir
-                $shortcut.Save()
-                Write-Host "[+] Acceso directo de inicio registrado en Startup." -ForegroundColor Green
-            }
-        } catch {}
-    }
+    } catch {}
 }
 
-# 6. EJECUCION DE SONDEO INICIAL EN TIEMPO REAL
+# 7. EJECUCION DE SONDEO INICIAL DE TELEMETRIA
 Write-Host ">>> Ejecutando sondeo y conexion inicial con el servidor..." -ForegroundColor Cyan
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$collectorPath"
+
+# 8. LANZAMIENTO DEL AGENTE DE BARRA DE TAREAS (SYSTEM TRAY)
+Write-Host ">>> Iniciando icono del agente en el area de notificacion junto al reloj..." -ForegroundColor Cyan
+try {
+    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"$trayScriptPath\`"" -WindowStyle Hidden
+    Write-Host "[OK] Icono del agente activo en la barra de tareas." -ForegroundColor Green
+} catch {
+    Write-Warning "No se pudo iniciar el proceso de barra de tareas: $_"
+}
 
 Write-Host ""
 Write-Host "==================================================================" -ForegroundColor Green
@@ -631,7 +1086,12 @@ Write-Host "  ¡AGENTE INSTALADO Y CONECTADO EXITOSAMENTE AL SERVIDOR!         "
 Write-Host "==================================================================" -ForegroundColor Green
 Write-Host "Equipo:        $env:COMPUTERNAME" -ForegroundColor Cyan
 Write-Host "Directorio:    $installDir" -ForegroundColor White
+Write-Host "Configuracion: $configPath" -ForegroundColor White
+Write-Host "Logs/Errores:  $logsDir\\telemetry.log" -ForegroundColor White
 Write-Host "Servidor:      ${serverUrl}" -ForegroundColor White
+Write-Host ""
+Write-Host "NOTA: Busque el icono corporativo de Petroil junto al reloj de Windows" -ForegroundColor Yellow
+Write-Host "      Haga doble clic para ver telemetria o clic derecho para opciones." -ForegroundColor Yellow
 Write-Host ""
 `;
 
@@ -648,9 +1108,10 @@ const serveWindowsBat: express.RequestHandler = (req, res) => {
   const serverUrl = getBaseServerUrl(req);
   const batScript = `@echo off
 chcp 65001 >nul
-title Instalador Agente Petroil ITAsset
+title Instalador Agente Petroil ITAsset (Windows 11 / 10)
 echo ====================================================================
 echo   INSTALADOR AUTOMATICO AGENTE PETROIL ITASSET (WINDOWS 11 / 10)
+echo   Servidor Hub: ${serverUrl}
 echo ====================================================================
 echo.
 echo Verificando permisos de Administrador...
@@ -662,13 +1123,14 @@ if %errorLevel% neq 0 (
 )
 
 echo [+] Permisos confirmados.
-echo [*] Conectando con el servidor en: ${serverUrl}...
+echo [*] Conectando con el servidor e instalando agente en Windows...
 echo.
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls; try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true} } catch {}; iex (irm '${serverUrl}/api/v1/agent/install-windows.ps1')"
 
 echo.
 echo ====================================================================
+echo Instalacion finalizada. Busque el icono del Agente junto al reloj.
 echo Presione cualquier tecla para cerrar esta ventana...
 echo ====================================================================
 pause >nul
